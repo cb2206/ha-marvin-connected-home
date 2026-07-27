@@ -1,0 +1,7 @@
+__pycache__/
+*.py[cod]
+.venv/
+.DS_Store
+# captures contain live bearer tokens
+*.mitm
+marvin-api-request-email.md

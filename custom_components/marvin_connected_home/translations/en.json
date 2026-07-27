@@ -1,0 +1,147 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Sign in to Marvin",
+        "description": "Marvin's app uses a mobile-only redirect (`aurora://login/verify`), so Home Assistant cannot complete the sign-in for you.\n\n1. **[Open the Marvin sign-in page]({authorize_url})** in Chrome and sign in.\n\n2. Your browser will fail to open a page starting `aurora://`. That is expected \u2014 copy the whole URL from the address bar.\n\n3. Paste it below.\n\nIf your browser discards the address (Safari does), open DevTools, enable **Preserve log** on the Network tab, and copy the `Location` header from the final redirect.",
+        "data": {
+          "redirect_url": "Redirect URL"
+        }
+      },
+      "house": {
+        "title": "Select a house",
+        "data": {
+          "house_id": "House"
+        }
+      },
+      "reauth_confirm": {
+        "title": "Sign in to Marvin again",
+        "description": "The saved session can no longer be renewed.\n\n**[Sign in to Marvin again]({authorize_url})**, then paste the redirect URL below.",
+        "data": {
+          "redirect_url": "Redirect URL"
+        }
+      }
+    },
+    "error": {
+      "no_code": "No authorization code found in that URL. Make sure you copied the full address, including everything after `?`.",
+      "invalid_code": "That code was rejected. Codes are single-use and expire quickly \u2014 start again from the sign-in link above.",
+      "no_refresh_token": "Sign-in succeeded but no refresh token was issued, so Home Assistant could not stay signed in.",
+      "cannot_connect": "Could not reach Marvin's servers."
+    },
+    "abort": {
+      "already_configured": "This house is already set up.",
+      "cannot_connect": "Could not reach Marvin's servers.",
+      "no_houses": "No houses were found on this Marvin account."
+    }
+  },
+  "entity": {
+    "binary_sensor": {
+      "lock": {
+        "name": "Lock"
+      },
+      "rain": {
+        "name": "Rain detected"
+      },
+      "obstruction": {
+        "name": "Obstruction"
+      },
+      "on_battery": {
+        "name": "Running on backup power"
+      },
+      "closed_sensor": {
+        "name": "Closed sensor"
+      }
+    },
+    "button": {
+      "check_firmware": {
+        "name": "Check for firmware update"
+      }
+    },
+    "cover": {
+      "all_windows": {
+        "name": "All windows"
+      }
+    },
+    "number": {
+      "contact_position_1": {
+        "name": "Contact position 1"
+      },
+      "contact_position_2": {
+        "name": "Contact position 2"
+      },
+      "contact_position_3": {
+        "name": "Contact position 3"
+      }
+    },
+    "sensor": {
+      "wifi_rssi": {
+        "name": "Wi-Fi signal"
+      },
+      "target_position": {
+        "name": "Target position"
+      },
+      "last_heartbeat": {
+        "name": "Last heartbeat"
+      },
+      "fw_window_control_board": {
+        "name": "Firmware (window control board)"
+      },
+      "fw_on_unit": {
+        "name": "Firmware (on-unit control)"
+      },
+      "fw_rain_sensor": {
+        "name": "Firmware (rain sensor)"
+      },
+      "fw_motor_control_board": {
+        "name": "Firmware (motor control board)"
+      },
+      "fw_remote": {
+        "name": "Firmware (remote)"
+      },
+      "indoor_temperature": {
+        "name": "Indoor temperature"
+      },
+      "indoor_humidity": {
+        "name": "Indoor humidity"
+      },
+      "indoor_dew_point": {
+        "name": "Indoor dew point"
+      },
+      "indoor_co2": {
+        "name": "Indoor CO2"
+      },
+      "indoor_voc": {
+        "name": "Indoor VOC"
+      },
+      "indoor_pm25": {
+        "name": "Indoor PM2.5"
+      },
+      "outdoor_temperature": {
+        "name": "Outdoor temperature"
+      },
+      "outdoor_humidity": {
+        "name": "Outdoor humidity"
+      },
+      "outdoor_dew_point": {
+        "name": "Outdoor dew point"
+      },
+      "outdoor_conditions": {
+        "name": "Outdoor conditions"
+      }
+    },
+    "switch": {
+      "close_when_raining": {
+        "name": "Close when raining"
+      },
+      "buzzer": {
+        "name": "On-window sound"
+      },
+      "on_unit_led": {
+        "name": "On-window switch LED"
+      },
+      "auto_venting": {
+        "name": "Auto venting"
+      }
+    }
+  }
+}
