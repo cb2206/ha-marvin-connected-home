@@ -10,7 +10,7 @@
   "iot_class": "cloud_push",
   "issue_tracker": "https://github.com/cb2206/ha-marvin-connected-home/issues",
   "requirements": [
-    "marvin-connected-home @ git+https://github.com/cb2206/marvin-connected-home@v0.2.0"
+    "marvin-connected-home@git+https://github.com/cb2206/marvin-connected-home@v0.2.0"
   ],
-  "version": "0.2.0"
+  "version": "0.2.1"
 }
