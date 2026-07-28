@@ -1,6 +1,6 @@
 # HA Integration — Entity Design
 
-Draft for review. No code yet.
+Design notes for the integration. Reflects what ships.
 
 ## Repos
 
@@ -73,7 +73,7 @@ DeviceInfo(
   name=asset["name"],                          # "Primary Awning"
   manufacturer="Marvin",
   model=state["boardType"],                    # "CAAWNE"
-  sw_version=state["onUnitFirmwareVersion"],   # "03.02.00"
+  sw_version=state["wcBfirmwareVersion"],      # "04.09.00" -- the board owners track
   connections={(CONNECTION_NETWORK_MAC, state["networkInfo"]["mac"])},
 )
 ```
@@ -122,8 +122,8 @@ Position streams live during travel via SignalR, so `is_opening`/`is_closing` an
 | Wi-Fi signal | `state.wiFiRSSI` | dBm, `signal_strength`, diagnostic |
 | Target position | `state.targetSashPercent` | %, diagnostic |
 | Last heartbeat | `status.lastHeartbeat` | `timestamp`, diagnostic |
-| Last command | `status.lastCommandReceived` | `timestamp`, diagnostic |
 | Control path | internal | `cloud` / `dry_contact` / `unavailable` — see fallback |
+| Dry contacts | internal | summary of the fallback wiring, plus where to change it |
 
 ### Firmware reporting
 
@@ -137,7 +137,7 @@ All four are surfaced, three ways:
 | Diagnostic sensors | One per component: `wcB`, `onUnit`, `rainSensor`, `mcB`, `remote` |
 | Diagnostics download | All of them, always |
 
-The per-component sensors are `EntityCategory.DIAGNOSTIC` with `entity_registry_enabled_default = False` — present for anyone who wants them, hidden by default so five extra entities per window don't clutter a multi-window install. This is the idiomatic HA answer to "expose it but don't spam"; stuffing them into attributes on another entity would hide them from history and templating.
+The per-component sensors are `EntityCategory.DIAGNOSTIC`, which keeps them off dashboards and collapsed on the device page while still recording history. Stuffing them into attributes on another entity would hide them from history and templating, which defeats the point for firmware-dependent debugging.
 
 `remoteFirmwareVersion` is empty on the reference unit; its sensor is only created when non-empty.
 
@@ -148,7 +148,7 @@ The per-component sensors are `EntityCategory.DIAGNOSTIC` with `entity_registry_
 | Close when raining | `configSettings.closeWhenRain` | switch |
 | Buzzer | `configSettings.buzzerDisabled` | switch, inverted |
 | On-unit LEDs | `configSettings.oucLEDEnabled` | switch |
-| Contact position 2/3/4 | `configSettings.hA2/3/4Position` | `number`, 0–100, config category |
+| Contact position 1/2/3 | `configSettings.hA2/3/4Position` | `number`, 0–100, config category |
 
 Exposing the `hA*Position` values as `number` entities is a genuine bonus — it lets the dry-contact stops be retuned from HA.
 
@@ -279,23 +279,94 @@ Deliberate choice: never fabricate a position. A cover that claims 60% while act
 
 ---
 
+## Implementation status
+
+Everything in this document ships and runs against real hardware, except where
+noted below.
+
+| Area | Status |
+|---|---|
+| Auth (B2C, PKCE, manual-paste redirect, reauth) | **Verified** |
+| Token refresh, with rotation persisted back to the entry | **Verified** |
+| `cover` — 0–100% positioning, live travel, stop | **Verified** |
+| `binary_sensor`, `sensor`, `switch`, `number`, `button` | **Verified** |
+| SignalR real-time push | **Verified** |
+| Diagnostics download with redaction | Implemented |
+| Dry-contact fallback | Implemented; selection logic unit-tested, **failover never executed against real relays** |
+| Reboot / recalibrate buttons | **Not shipped** — endpoints uncaptured |
+
+### Entity defaults
+
+Every entity is enabled by default except `cover.<house>_all_windows`, which is
+disabled because one press moves every window in the house.
+
+An earlier revision disabled all diagnostic and config entities. That was wrong:
+`entity_category` already keeps them off dashboards and collapses them on the
+device page, so hiding them bought almost nothing — while costing recorder
+history, which cannot be backfilled once an entity is enabled. It was worst for
+`wifi_rssi`, on hardware whose Wi-Fi link is known to be marginal. The rule now
+is: if an entity is worth creating, it is worth recording; if it is not worth
+recording, do not create it.
+
+Note that changing `entity_registry_enabled_default` only affects **new**
+installs. Home Assistant writes `disabled_by: integration` into the entity
+registry at first registration and never revisits it, so existing installs need
+each entity enabled by hand.
+
+### Discoverability
+
+Options flows are easy to lose track of, so each window carries a **Dry
+contacts** diagnostic sensor whose state is the reachable positions (or
+`Not configured`) and whose attributes spell out the full mapping plus a
+`configure_at` pointer. Home Assistant only renders an entity's *state* in the
+device list — attributes are behind the entity's More Info dialog — so the state
+string is chosen to be useful on its own, including a `(no stop)` suffix when
+terminal 2 is unwired.
+
+---
+
 ## Open questions
 
-Ordered by how much they block the build.
+1. **Reboot and recalibrate are uncaptured.** Both exist in the app; neither was
+   triggered. API.md carries a placeholder guessed by analogy with `performota`,
+   explicitly marked unverified. The `button` entities for these do not ship — a
+   wrong path merely 404s, but a wrong *body* against a live endpoint attached to
+   a motorised window might not be so benign. Recalibrate additionally drives the
+   sash through a full travel cycle, so it needs a confirmation step even once
+   the shape is known.
 
-1. **Reboot and recalibrate are uncaptured.** Both exist in the app; neither was triggered. API.md carries a placeholder guessed by analogy with `performota` (`POST /devices/reboot/{deviceId}`, `{}`), explicitly marked unverified. The `button` entities for these must not ship until captured — a wrong path merely 404s, but a wrong body against a live endpoint might not be so benign. **Action item: capture when convenient and safe.**
+2. **Temperature units.** `/defaults` was checked and contains **no** unit keys,
+   so where the °C/°F preference lives is still unknown. The integration assumes
+   Celsius. Guessing wrong silently corrupts recorder history, the same class of
+   bug as the sentinels.
 
-2. **Token lifetime is unobserved.** Access token TTL is 1 hour and the capture was too short to see a refresh. The iPhone app staying logged in for months strongly suggests long-lived sliding refresh tokens (B2C's default is a 14-day sliding window, which never expires in practice if the client refreshes regularly) — but that's the *app's* session, and it doesn't guarantee our client gets refresh tokens at all. That depends on whether `offline_access` is in the granted scopes. **First thing the client proves out**, because if it needs interactive re-auth hourly the integration isn't viable as designed.
+3. **Non-sash commands unverified** — shade, LED, lock, CLiC and tinting come
+   from app action constants only, with no hardware to test against. All
+   capability-gated, so they simply produce no entity on hardware that lacks
+   them.
 
-3. **Temperature units.** Could be °C or °F per account or region. `/defaults` is the likely source. Must not be assumed — guessing wrong silently corrupts recorder history, same class of bug as the sentinels.
+4. **Group commands only partly verified.** House-wide broadcast works: passing a
+   House id to `/commands` moves every asset, which is what the app's airflow
+   control does. Marvin's server-side *groups* (`groupStates`,
+   `HouseGroupStateUpdated`) are real but their command shape is unknown.
 
-4. **Non-sash commands unverified** — shade, LED, lock, CLiC, tinting come from app action constants only, with no hardware to test against. All capability-gated; ship as best-effort and mark clearly as untested in the README.
+5. **Environment sensors return sentinels on the reference account**, with
+   `autoVentingEnabled: false`. The hypothesis is that the Air Algorithm
+   populates them only when auto-venting is on; it may instead be that
+   casement/awning units lack the IAQ hardware Awaken skylights carry. The
+   entities exist and self-populate if data ever appears.
 
-5. **Group commands unverified.** `groupStates` and `HouseGroupStateUpdated` exist, and the Control4 driver had group proxies, so server-side groups are real. Command shape unknown.
+6. **The `hA*Position` → terminal mapping is still undocumented.** The
+   integration does not depend on it — the fallback uses positions the user
+   declares — but the config flow's pre-filled suggestions assume
+   `hA2`→terminal 5, `hA3`→4, `hA4`→3. Anyone wiring this up should confirm
+   against their own hardware by firing one relay channel and reading the
+   position back.
 
-6. **`Bearer Bearer`** — the app sends a doubled scheme. Test whether a single `Bearer` is accepted; only replicate the bug if the API rejects the correct form.
-
-7. **Environment sensors return sentinels on the reference account** with `autoVentingEnabled: false`. Hypothesis is that the Air Algorithm populates them only when auto-venting is on. Unverified, and it may simply be that casement/awning units lack the IAQ hardware that Awaken skylights carry.
+7. **The failover path has never run against real relays.** Its selection logic
+   has unit tests, but no relay has been pulsed by this code. Worth exercising
+   deliberately — block access to `azapi.marvin.com` for a minute — rather than
+   discovering its behaviour during a real outage.
 
 ---
 

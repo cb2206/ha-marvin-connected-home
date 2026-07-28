@@ -15,9 +15,16 @@ Azure AD B2C.
 | Issuer | `https://marvinwindowsb2c.b2clogin.com/{tid}/v2.0/` |
 | Public client id | `0d117826-a605-4d81-999e-ae67e85de895` |
 | Policy | `B2C_1A_AuroraSignInRegister` |
-| Access token TTL | 3600 s |
+| Other policies | `B2C_1A_AuroraPasswordReset`, `B2C_1A_AuroraProfileEdit` |
+| Redirect URI | `aurora://login/verify` |
+| Scopes | `openid offline_access` |
+| Flow | authorization code + PKCE |
+| Token TTL | 3600 s |
+| Refresh | verified working; refresh tokens rotate on use |
 
 **Header quirk:** the app sends `authorization: Bearer Bearer <jwt>` — a doubled scheme, evidently a bug on Marvin's side. **The correct single `Bearer` also works** (verified), so there is no need to replicate it.
+
+**The redirect is a custom URI scheme**, so no web server can receive it, and new redirect URIs cannot be registered against Marvin's tenant. Headless and desktop clients must collect the authorization code by hand — Chrome keeps the failed `aurora://` URL in the address bar; Safari discards it, in which case read the `Location` header of the final 302 with DevTools *Preserve log* enabled.
 
 **The bearer is the `id_token`, not an access token.** With `scope=openid offline_access` and no resource scope, B2C returns only `id_token` and `refresh_token`; the app sends the id_token, which is why a working bearer carries `aud=<client_id>` and an `emailAddress` claim.
 

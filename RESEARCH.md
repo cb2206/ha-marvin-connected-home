@@ -4,11 +4,27 @@ Date: 2026-07-26
 
 ## TL;DR
 
-1. **No Home Assistant integration exists** — not in core, not in HACS, no GitHub project, no forum thread. Only Crestron Home and Control4 have drivers, and both are cloud-based.
-2. **There is no local control path.** The windows are ESP32 devices that hold a single outbound MQTT/TLS connection to **Azure IoT Hub** and expose *zero* listening TCP ports on the LAN. Verified empirically against your own three units.
-3. **A documented "Marvin API" exists**, and it uses **OAuth 2.0 Device Authorization Grant** — the ideal auth flow for a headless HA integration. Discovered by tearing down the Control4 driver.
-4. **But that API polls, and real-world state lags up to 10 minutes.** Marvin's own driver documentation says so. This is the single most important constraint, and it undercuts the obvious "use the cloud for state feedback" plan.
-5. **The app-facing API is probably better than the partner API** — the phone app shows live status and receives rain/obstruction push notifications, so a faster channel exists. That's the main reason to still do the app reverse-engineering.
+This document is the research log, written as the investigation ran. Some
+intermediate conclusions were overturned by later evidence; where that happened
+the original reasoning is kept, because how a wrong conclusion was reached is
+usually more useful than the conclusion. The findings below are the settled ones.
+
+1. **No Home Assistant integration existed.** Only Crestron Home and Control4
+   had drivers, both cloud-based. This work produced the first HA integration.
+2. **There is no local control path.** The windows are ESP32 devices holding a
+   single outbound MQTT/TLS connection to **Azure IoT Hub**, with *zero*
+   listening TCP ports. Verified by a full 65,535-port sweep against real
+   hardware, with same-VLAN peers as a control.
+3. **Marvin's sanctioned partner API polls, with real-world state lagging up to
+   10 minutes** — stated in their own Control4 driver documentation.
+4. **But the app-facing API is far better, and that is what the integration
+   uses.** It pushes over Azure SignalR in **sub-second** time, including for
+   changes that never went through the cloud: a dry-contact relay close produced
+   live progressive position updates and a final lock confirmation. The
+   10-minute figure is a restriction on the partner API, not the platform.
+5. **The whole surface was reverse-engineered from the Android app** and is
+   documented in API.md. Auth is Azure AD B2C with a mobile-only redirect, which
+   is why the integration's config flow asks the user to paste a URL back.
 
 ---
 
