@@ -2,7 +2,8 @@
 
 Each Marvin window exposes three configurable open positions that its physical
 dry-contact terminals drive to. Making them writable lets the hardware switch
-positions be retuned from Home Assistant.
+positions be retuned from Home Assistant, and recording them means a change
+is visible in history rather than silently altering what the relays do.
 
 The mapping from these config keys to physical terminals is *assumed*, not
 documented: `hA2Position` is taken to be terminal 5 (Position 1), `hA3Position`
@@ -88,7 +89,6 @@ class MarvinContactPosition(MarvinAssetEntity, NumberEntity):
     _attr_native_unit_of_measurement = PERCENTAGE
     _attr_mode = NumberMode.BOX
     _attr_entity_category = EntityCategory.CONFIG
-    _attr_entity_registry_enabled_default = False
 
     def __init__(
         self, coordinator: MarvinCoordinator, asset_id: str, description: MarvinNumberDescription

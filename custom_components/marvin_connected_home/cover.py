@@ -270,6 +270,10 @@ class MarvinHouseCover(MarvinAssetEntity, CoverEntity):
     Deliberately no position or state: it aggregates windows that can disagree,
     and reporting one number for all of them would be a lie. It is write-only,
     and cloud-only -- a house-wide broadcast has no dry-contact equivalent.
+
+    The only entity here disabled by default, and not for tidiness: one press
+    moves every window in the house, which is easy to do by accident and hard
+    to undo if it is raining.
     """
 
     _attr_device_class = CoverDeviceClass.WINDOW

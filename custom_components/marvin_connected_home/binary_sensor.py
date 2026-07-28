@@ -63,7 +63,6 @@ SENSORS: tuple[MarvinBinarySensorDescription, ...] = (
         translation_key="closed_sensor",
         device_class=BinarySensorDeviceClass.OPENING,
         entity_category=EntityCategory.DIAGNOSTIC,
-        entity_registry_enabled_default=False,
         value_fn=lambda d: None if d.closed_sensor is None else not d.closed_sensor,
         supported_fn=lambda caps: caps.closed_sensor,
     ),

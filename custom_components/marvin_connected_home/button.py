@@ -25,7 +25,6 @@ CHECK_FIRMWARE = ButtonEntityDescription(
     key="check_firmware",
     translation_key="check_firmware",
     entity_category=EntityCategory.CONFIG,
-    entity_registry_enabled_default=False,
 )
 
 

@@ -45,7 +45,6 @@ DEVICE_SENSORS: tuple[MarvinSensorDescription, ...] = (
         native_unit_of_measurement=SIGNAL_STRENGTH_DECIBELS_MILLIWATT,
         state_class=SensorStateClass.MEASUREMENT,
         entity_category=EntityCategory.DIAGNOSTIC,
-        entity_registry_enabled_default=False,
         value_fn=lambda d: d.wifi_rssi,
     ),
     MarvinSensorDescription(
@@ -53,7 +52,6 @@ DEVICE_SENSORS: tuple[MarvinSensorDescription, ...] = (
         translation_key="target_position",
         native_unit_of_measurement=PERCENTAGE,
         entity_category=EntityCategory.DIAGNOSTIC,
-        entity_registry_enabled_default=False,
         value_fn=lambda d: d.target_sash_position,
     ),
     MarvinSensorDescription(
@@ -61,49 +59,43 @@ DEVICE_SENSORS: tuple[MarvinSensorDescription, ...] = (
         translation_key="last_heartbeat",
         device_class=SensorDeviceClass.TIMESTAMP,
         entity_category=EntityCategory.DIAGNOSTIC,
-        entity_registry_enabled_default=False,
         value_fn=lambda d: _aware(d.last_heartbeat),
     ),
 )
 
 #: A window reports four independent firmware versions and they genuinely
 #: differ, so collapsing them to one number would mislead anyone debugging
-#: board-specific behaviour. All are exposed, disabled by default so a
-#: multi-window install is not flooded.
+#: board-specific behaviour. All are exposed as diagnostic entities, which
+#: keeps them off dashboards while still recording history.
 FIRMWARE_SENSORS: tuple[MarvinSensorDescription, ...] = (
     MarvinSensorDescription(
         key="fw_window_control_board",
         translation_key="fw_window_control_board",
         entity_category=EntityCategory.DIAGNOSTIC,
-        entity_registry_enabled_default=False,
         value_fn=lambda d: d.firmware.window_control_board,
     ),
     MarvinSensorDescription(
         key="fw_on_unit",
         translation_key="fw_on_unit",
         entity_category=EntityCategory.DIAGNOSTIC,
-        entity_registry_enabled_default=False,
         value_fn=lambda d: d.firmware.on_unit,
     ),
     MarvinSensorDescription(
         key="fw_rain_sensor",
         translation_key="fw_rain_sensor",
         entity_category=EntityCategory.DIAGNOSTIC,
-        entity_registry_enabled_default=False,
         value_fn=lambda d: d.firmware.rain_sensor,
     ),
     MarvinSensorDescription(
         key="fw_motor_control_board",
         translation_key="fw_motor_control_board",
         entity_category=EntityCategory.DIAGNOSTIC,
-        entity_registry_enabled_default=False,
         value_fn=lambda d: d.firmware.motor_control_board,
     ),
     MarvinSensorDescription(
         key="fw_remote",
         translation_key="fw_remote",
         entity_category=EntityCategory.DIAGNOSTIC,
-        entity_registry_enabled_default=False,
         value_fn=lambda d: d.firmware.remote,
     ),
 )
