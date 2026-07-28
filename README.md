@@ -182,7 +182,7 @@ python -m pytest tests/
 
 Never commit `.mitm` capture files — they contain live bearer tokens. `.gitignore` covers them.
 
-The integration currently shows Home Assistant's placeholder icon. Logos are served from `brands.home-assistant.io`, not from this repo, so the artwork in [brands/custom_integrations/marvin_connected_home/](brands/custom_integrations/marvin_connected_home/) has to be submitted to [home-assistant/brands](https://github.com/home-assistant/brands) before it appears — see that directory's README.
+The Marvin icon and logo ship in [`custom_components/marvin_connected_home/brand/`](custom_components/marvin_connected_home/brand/), which Home Assistant 2026.3 and later serve directly. Older installs ignore the folder and show the generic placeholder. Regenerate the images from the source SVG with `python scripts/brand/build_brand_assets.py`; see [scripts/brand/README.md](scripts/brand/README.md).
 
 See [API.md](API.md) for the reverse-engineered API reference, [DESIGN.md](DESIGN.md) for entity design and open questions, and [RESEARCH.md](RESEARCH.md) for how the platform was worked out.
 

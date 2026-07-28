@@ -29,6 +29,7 @@ jobs:
       - uses: hacs/action@main
         with:
           category: integration
-          # This repo is installed as a HACS custom repository; it is not in
-          # the home-assistant/brands registry (yet), so skip that check.
+          # Brand images ship in custom_components/marvin_connected_home/brand/,
+          # which HA 2026.3+ serves directly. The home-assistant/brands registry
+          # no longer accepts new custom components, so this check cannot pass.
           ignore: brands

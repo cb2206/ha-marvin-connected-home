@@ -12,5 +12,5 @@
   "requirements": [
     "marvin-connected-home@git+https://github.com/cb2206/marvin-connected-home@v0.3.0"
   ],
-  "version": "0.3.0"
+  "version": "0.3.1"
 }

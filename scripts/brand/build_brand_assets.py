@@ -13,7 +13,7 @@ from PIL import Image
 HERE = Path(__file__).resolve().parent
 REPO = HERE.parent.parent
 SRC = HERE / "marvin-logo.svg"
-OUT = REPO / "brands" / "custom_integrations" / "marvin_connected_home"
+OUT = REPO / "custom_components" / "marvin_connected_home" / "brand"
 OUT.mkdir(parents=True, exist_ok=True)
 
 # Render far above the largest target so every downscale is a clean reduction.
