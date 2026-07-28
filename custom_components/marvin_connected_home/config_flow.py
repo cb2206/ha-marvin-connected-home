@@ -12,6 +12,7 @@ it: only the verifier held by this flow can redeem it.
 from __future__ import annotations
 
 import logging
+import secrets
 from collections.abc import Mapping
 from typing import Any
 from urllib.parse import parse_qs, urlparse
@@ -84,9 +85,37 @@ class MarvinConfigFlow(ConfigFlow, domain=DOMAIN):
 
     def __init__(self) -> None:
         self._verifier: str | None = None
+        self._state: str | None = None
         self._authorize_url: str | None = None
         self._refresh_token: str | None = None
         self._houses: dict[str, str] = {}
+
+    def _begin_authorization(self, session: Any) -> None:
+        """Generate the PKCE pair and a per-flow ``state``, build the URL.
+
+        The random ``state`` round-trips through B2C and is checked on
+        paste-back, so a URL crafted by someone else (a login-CSRF attempt to
+        splice their account into this Home Assistant) fails closed. PKCE
+        already binds the *code* to this flow; ``state`` binds the whole URL.
+        """
+        verifier, challenge = generate_pkce_pair()
+        self._verifier = verifier
+        self._state = secrets.token_urlsafe(16)
+        self._authorize_url = B2CTokenProvider(session).build_authorization_url(
+            B2C_REDIRECT_URI, challenge, state=self._state
+        )
+
+    def _check_pasted(self, value: str) -> tuple[str | None, str | None]:
+        """Return ``(code, error)`` for a pasted redirect URL."""
+        code = _extract_code(value)
+        if not code:
+            return None, "no_code"
+        returned_state = _extract_state(value)
+        # A bare code has no state to check; that is documented and accepted.
+        # A full URL carrying the *wrong* state is not ours -- reject it.
+        if returned_state is not None and returned_state != self._state:
+            return None, "state_mismatch"
+        return code, None
 
     async def async_step_user(
         self, user_input: dict[str, Any] | None = None
@@ -95,17 +124,13 @@ class MarvinConfigFlow(ConfigFlow, domain=DOMAIN):
         session = async_get_clientsession(self.hass)
 
         if self._verifier is None:
-            verifier, challenge = generate_pkce_pair()
-            self._verifier = verifier
-            self._authorize_url = B2CTokenProvider(session).build_authorization_url(
-                B2C_REDIRECT_URI, challenge, state="hass"
-            )
+            self._begin_authorization(session)
 
         errors: dict[str, str] = {}
         if user_input is not None:
-            code = _extract_code(user_input[CONF_REDIRECT_URL])
-            if not code:
-                errors["base"] = "no_code"
+            code, error = self._check_pasted(user_input[CONF_REDIRECT_URL])
+            if error:
+                errors["base"] = error
             else:
                 provider = B2CTokenProvider(session)
                 try:
@@ -187,17 +212,13 @@ class MarvinConfigFlow(ConfigFlow, domain=DOMAIN):
         session = async_get_clientsession(self.hass)
 
         if self._verifier is None:
-            verifier, challenge = generate_pkce_pair()
-            self._verifier = verifier
-            self._authorize_url = B2CTokenProvider(session).build_authorization_url(
-                B2C_REDIRECT_URI, challenge, state="hass"
-            )
+            self._begin_authorization(session)
 
         errors: dict[str, str] = {}
         if user_input is not None:
-            code = _extract_code(user_input[CONF_REDIRECT_URL])
-            if not code:
-                errors["base"] = "no_code"
+            code, error = self._check_pasted(user_input[CONF_REDIRECT_URL])
+            if error:
+                errors["base"] = error
             else:
                 provider = B2CTokenProvider(session)
                 try:
@@ -209,12 +230,30 @@ class MarvinConfigFlow(ConfigFlow, domain=DOMAIN):
                 except MarvinConnectionError:
                     errors["base"] = "cannot_connect"
                 else:
-                    if provider.refresh_token:
-                        return self.async_update_reload_and_abort(
-                            self._get_reauth_entry(),
-                            data_updates={CONF_REFRESH_TOKEN: provider.refresh_token},
-                        )
-                    errors["base"] = "no_refresh_token"
+                    if not provider.refresh_token:
+                        errors["base"] = "no_refresh_token"
+                    else:
+                        # Signing in with a *different* Marvin account would
+                        # "succeed" here and then break at the next poll, when
+                        # the stored house turns out not to belong to it. Check
+                        # now, while the user is still at the form.
+                        entry = self._get_reauth_entry()
+                        try:
+                            houses = await MarvinClient(session, provider).async_get_houses()
+                        except MarvinError:
+                            errors["base"] = "cannot_connect"
+                        else:
+                            house_ids = {
+                                str(house.get("id") or house.get("houseId") or "")
+                                for record in houses
+                                for house in _unwrap(record)
+                            }
+                            if entry.data[CONF_HOUSE_ID] not in house_ids:
+                                return self.async_abort(reason="reauth_account_mismatch")
+                            return self.async_update_reload_and_abort(
+                                entry,
+                                data_updates={CONF_REFRESH_TOKEN: provider.refresh_token},
+                            )
 
         return self.async_show_form(
             step_id="reauth_confirm",
@@ -397,6 +436,16 @@ def _extract_code(value: str) -> str | None:
         return value
     query = parse_qs(urlparse(value).query or value.lstrip("?"))
     found = query.get("code")
+    return found[0] if found else None
+
+
+def _extract_state(value: str) -> str | None:
+    """The ``state`` parameter from a pasted redirect URL, if present."""
+    value = (value or "").strip().strip("'\"")
+    if "=" not in value:
+        return None
+    query = parse_qs(urlparse(value).query or value.lstrip("?"))
+    found = query.get("state")
     return found[0] if found else None
 
 

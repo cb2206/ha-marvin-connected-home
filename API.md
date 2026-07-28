@@ -198,7 +198,7 @@ Server-to-client methods:
 
 | Target | Payload |
 |---|---|
-| `AssetUpdated` | full asset JSON (same shape as within `/houses/{houseId}`) |
+| `AssetUpdated` | full asset JSON in every capture so far — but *observed*, not guaranteed, and `GET /houses/{id}` proves the API sends stub assets in other contexts. Consumers should merge over cached state (`merge_assets()`), not replace. |
 | `HouseGroupStateUpdated` | group state |
 
 `arguments[0]` is a **JSON string**, not an object — parse twice.

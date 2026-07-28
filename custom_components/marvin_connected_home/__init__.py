@@ -34,7 +34,25 @@ PLATFORMS: list[Platform] = [
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     session = async_get_clientsession(hass)
-    provider = B2CTokenProvider(session, refresh_token=entry.data[CONF_REFRESH_TOKEN])
+
+    def _persist_refresh_token(token: str) -> None:
+        """Write every rotation back to the entry, not just the setup-time one.
+
+        B2C rotates the refresh token on each renewal -- roughly hourly -- and
+        the old token must be assumed single-use. Persisting only at setup
+        leaves a stale credential in storage, which turns any restart after the
+        first hour of uptime into a forced re-authentication.
+        """
+        if token != entry.data.get(CONF_REFRESH_TOKEN):
+            hass.config_entries.async_update_entry(
+                entry, data={**entry.data, CONF_REFRESH_TOKEN: token}
+            )
+
+    provider = B2CTokenProvider(
+        session,
+        refresh_token=entry.data[CONF_REFRESH_TOKEN],
+        on_refresh_token_update=_persist_refresh_token,
+    )
 
     try:
         await provider.async_refresh()
@@ -44,12 +62,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         raise ConfigEntryAuthFailed(str(err)) from err
     except MarvinConnectionError as err:
         raise ConfigEntryNotReady(str(err)) from err
-
-    # Refresh tokens rotate on every use, so the stored one is now stale.
-    if provider.refresh_token and provider.refresh_token != entry.data[CONF_REFRESH_TOKEN]:
-        hass.config_entries.async_update_entry(
-            entry, data={**entry.data, CONF_REFRESH_TOKEN: provider.refresh_token}
-        )
 
     client = MarvinClient(session, provider)
     realtime = MarvinRealtime(session, provider)

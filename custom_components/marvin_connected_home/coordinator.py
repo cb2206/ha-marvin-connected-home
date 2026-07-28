@@ -22,6 +22,7 @@ from marvin_connected_home import (
     MarvinClient,
     MarvinError,
     MarvinRealtime,
+    merge_assets,
 )
 
 from .const import CONF_FALLBACK, DOMAIN, SCAN_INTERVAL_SECONDS
@@ -106,14 +107,18 @@ class MarvinCoordinator(DataUpdateCoordinator[House]):
     def _handle_asset_update(self, asset: Asset) -> None:
         """Merge a pushed asset into the cached house.
 
-        Replaces in place rather than refetching: the push carries the full
-        asset, so a round trip would add latency for no new information.
+        Merges rather than refetching: the push has carried the full asset in
+        every capture so far, so a round trip would add latency for no new
+        information. But "observed" is not "guaranteed" -- ``merge_assets``
+        preserves cached sections a partial push omits, so a stub payload can
+        never flip config switches and contact positions to unknown for the
+        five minutes until the next poll.
         """
         if self.data is None:
             return
         for index, existing in enumerate(self.data.assets):
             if existing.asset_id == asset.asset_id:
-                self.data.assets[index] = asset
+                self.data.assets[index] = merge_assets(existing, asset)
                 break
         else:
             self.data.assets.append(asset)

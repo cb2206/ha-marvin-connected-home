@@ -88,8 +88,8 @@ Contacts are **momentary and edge-triggered** — no minimum duration. If your r
 
 ### What changes while degraded
 
-- Requested positions **snap to the nearest configured stop**, and the cover reports the stop it reached — not the number you asked for.
-- `SET_POSITION` and `STOP` disappear from the cover's supported features unless your wiring actually supports them.
+- Requested positions **snap to the nearest configured stop that moves in the requested direction**, and the cover reports the stop it reached — not the number you asked for. An open request never fires the close relay: with only a close contact wired, "open" refuses rather than shutting the window on you.
+- `OPEN`, `SET_POSITION` and `STOP` disappear from the cover's supported features unless your wiring actually supports them — opening needs at least one open-position contact, stopping needs terminal 2.
 - **Position and open/closed report `unknown`** unless you configured your own sash contact sensor. A cover claiming 60% while shut is worse than one admitting it does not know.
 - The `Control path` sensor reflects reality, so automations can branch on it. An optional notification fires on switchover.
 

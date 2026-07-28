@@ -25,13 +25,15 @@
     "error": {
       "no_code": "No authorization code found in that URL. Make sure you copied the full address, including everything after `?`.",
       "invalid_code": "That code was rejected. Codes are single-use and expire quickly \u2014 start again from the sign-in link above.",
+      "state_mismatch": "That URL came from a different sign-in attempt. Start again from the sign-in link above and paste the URL it produces.",
       "no_refresh_token": "Sign-in succeeded but no refresh token was issued, so Home Assistant could not stay signed in.",
       "cannot_connect": "Could not reach Marvin's servers."
     },
     "abort": {
       "already_configured": "This house is already set up.",
       "cannot_connect": "Could not reach Marvin's servers.",
-      "no_houses": "No houses were found on this Marvin account."
+      "no_houses": "No houses were found on this Marvin account.",
+      "reauth_account_mismatch": "That Marvin account cannot see this house. Sign in with the account this house was originally set up with."
     }
   },
   "entity": {

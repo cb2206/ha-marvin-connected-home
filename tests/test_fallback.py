@@ -135,7 +135,9 @@ class TestResolve:
             (20, P1, 20),
             (55, P2, 60),
             (35, P1, 20),
-            (5, CLOSE, 0),
+            # 5 is nearer to closed than to 20, but it is an *open* request, so
+            # it must go to the lowest open stop rather than fire the close relay.
+            (5, P1, 20),
             (95, P3, 100),
         ],
     )
@@ -159,11 +161,20 @@ class TestResolve:
         assert stop is not None
         assert stop.entity_id == CLOSE
 
-    def test_close_used_when_no_open_stops(self) -> None:
+    def test_open_request_never_fires_the_close_relay(self) -> None:
+        """A close-only install cannot open. Firing the close relay for an open
+        request would move the window in the opposite direction from the one
+        the user asked for -- refusing is the only honest answer."""
         cfg = FallbackConfig.parse({"close_switch": CLOSE})
-        stop = cfg.resolve(100)
-        assert stop is not None
-        assert stop.position == 0, "only a close contact exists; that is all we can do"
+        assert cfg.resolve(100) is None
+        assert cfg.resolve(1) is None
+        assert cfg.can_open is False
+
+    def test_open_request_skips_a_zero_position_stop(self) -> None:
+        """A stop configured at 0% is a close in disguise; same rule applies."""
+        cfg = FallbackConfig.parse({"position_switches": [{"entity": P1, "position": 0}]})
+        assert cfg.resolve(50) is None
+        assert cfg.can_open is False
 
     def test_open_only_install_cannot_reach_zero_exactly(self) -> None:
         """Without a close wire, 0 snaps to the lowest open stop."""
@@ -171,3 +182,6 @@ class TestResolve:
         stop = cfg.resolve(0)
         assert stop is not None
         assert stop.position == 20
+
+    def test_full_install_can_open(self) -> None:
+        assert build().can_open is True

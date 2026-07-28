@@ -261,9 +261,10 @@ Anyone can verify their own mapping in minutes: fire one relay channel, read `sa
 
 ### Behaviour
 
-Failover is **automatic**, triggered when the cloud API is unreachable **or** `deviceOnline` is false.
+Failover is **automatic**, triggered when the cloud API is unreachable **or** `deviceOnline` is false. The library carries short request timeouts (15 s) precisely so this decision happens in seconds — before them, a hung connection meant a cover command blocked for aiohttp's five-minute default before falling back.
 
-- Requested position snaps to the nearest configured contact. Going to 55% with contacts at 20/60/100 fires the 60% contact, and the cover reports 60 — not 55.
+- Requested position snaps to the nearest configured contact — but **only among contacts that move in the requested direction**. Going to 55% with contacts at 20/60/100 fires the 60% contact, and the cover reports 60 — not 55. An *open* request never fires the close relay, even when 0 is the nearest configured position: with only a close contact wired, "open" would otherwise close the window, the exact inversion of the user's intent. Such a request raises instead, and `OPEN`/`SET_POSITION` are not advertised while degraded unless a stop above 0 exists.
+- A *close* request errs the other way: without a close contact it snaps to the lowest stop, since moving toward closed is the right failure mode for a window it may be raining on.
 - Without a `stop_switch`, `STOP` is unsupported while degraded and raises rather than silently no-oping.
 - The `Control path` sensor always reflects reality (`cloud` / `dry_contact` / `unavailable`), so automations can branch on it.
 - Persistent notification on switchover, honouring `notify_on_switchover`.
@@ -287,13 +288,41 @@ noted below.
 | Area | Status |
 |---|---|
 | Auth (B2C, PKCE, manual-paste redirect, reauth) | **Verified** |
-| Token refresh, with rotation persisted back to the entry | **Verified** |
+| Token refresh, with **every** rotation persisted back to the entry | Implemented — see below |
 | `cover` — 0–100% positioning, live travel, stop | **Verified** |
 | `binary_sensor`, `sensor`, `switch`, `number`, `button` | **Verified** |
 | SignalR real-time push | **Verified** |
 | Diagnostics download with redaction | Implemented |
 | Dry-contact fallback | Implemented; selection logic unit-tested, **failover never executed against real relays** |
 | Reboot / recalibrate buttons | **Not shipped** — endpoints uncaptured |
+
+### Token rotation persistence
+
+An earlier revision of this table claimed rotation persistence was verified
+when the code only persisted the rotation performed **at setup**. Every later
+renewal (roughly hourly) rotated the token in memory only, so after the first
+hour of uptime the entry held a stale credential — and since the old token must
+be assumed single-use, any restart from that point risked a forced re-login.
+
+The provider now takes an `on_refresh_token_update` callback and the
+integration persists **every** rotation into the config entry the moment it
+happens. The library's token-endpoint handling also distinguishes 4xx (bad
+credential → `ConfigEntryAuthFailed`, reauth flow) from 5xx (B2C outage →
+`ConfigEntryNotReady`, silent retry), so a transient Microsoft-side blip no
+longer shows the user a reauth prompt.
+
+### Partial-push defence
+
+`AssetUpdated` has carried the full asset in every capture, but
+`GET /houses/{id}` proves the API sends *stub* assets in some contexts, so the
+coordinator no longer replaces cached assets wholesale. `merge_assets()` (in
+the library) merges the push over the cache field-preservingly: pushed values
+win, sections the push omits keep their cached values, devices match by id. A
+partial push therefore cannot flip config switches and contact positions to
+unknown for the five minutes until the next poll. To settle whether partial
+pushes actually occur, log raw frames (`on_raw_message`) across a config write
+and a firmware update and check whether `configSettings`/`status` are always
+present — until then the merge makes the answer not matter.
 
 ### Entity defaults
 
@@ -379,7 +408,19 @@ terminal 2 is unwired.
 ## Release hygiene
 
 - **Diagnostics download must redact** bearer tokens, SignalR access tokens, email, MAC, IP, and house/asset UUIDs.
-- **Reauth flow** required, given the auth model.
+- **Reauth flow** required, given the auth model. It verifies the new sign-in can actually see the entry's house and aborts with `reauth_account_mismatch` otherwise — signing in with the wrong Marvin account would otherwise "succeed" and then break at the next poll.
+- **The config flow's OAuth `state` is random per flow** and checked on paste-back. A pasted URL carrying someone else's state is rejected (`state_mismatch`); a bare code is accepted, since it carries no state to check. PKCE binds the code; state binds the URL.
 - **Options flow** for the dry-contact mapping and notification toggle, so they're editable after setup.
 - **README must be explicit** about verified vs inferred hardware. Users with skylights or multi-slide doors should know they're the first to test that path.
 - Unofficial-API disclaimer: Marvin has re-platformed once already (Google Cloud IoT Core → Azure), so the API can change without notice.
+- **CI** runs on both repos: ruff + strict mypy + pytest on the library; pytest, hassfest and HACS validation here. The library release process is: tag `vX.Y.Z` on the library, then point `manifest.json`'s requirement at that tag and bump the integration version to match.
+
+## Roadmap
+
+- **Publish the library to PyPI and pin by version** (deferred 2026-07). The
+  manifest currently installs the library from a **git tag**, and tags are
+  mutable — anyone who compromises the GitHub account can silently change what
+  every install pulls, and HACS/HA convention expects PyPI requirements anyway.
+  Until then, treat tags as immutable by policy: never force-move a released
+  `v*` tag. Pinning a commit hash instead of a tag is the cheap interim
+  hardening if publishing stalls.

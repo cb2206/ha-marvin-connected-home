@@ -75,6 +75,16 @@ class FallbackConfig:
     def can_stop(self) -> bool:
         return self.stop_switch is not None
 
+    @property
+    def can_open(self) -> bool:
+        """True when some contact drives to a position above closed.
+
+        A close contact alone can only ever shut the window, so offering
+        "open" on the strength of it would fire the close relay for an open
+        request -- the exact inversion :meth:`resolve` refuses to perform.
+        """
+        return any(stop.position > 0 for stop in self.stops)
+
     @classmethod
     def parse(cls, raw: dict[str, Any] | None) -> FallbackConfig:
         raw = raw or {}
@@ -104,17 +114,22 @@ class FallbackConfig:
     def resolve(self, target: int) -> ContactStop | None:
         """Return the contact that best serves *target*, or None if unreachable.
 
-        ``0`` uses the close contact when there is one. Otherwise the nearest
-        configured stop wins; ties go to the lower position, which errs toward
-        closing rather than opening a window further than asked.
+        A close request (``0``) uses the close contact when there is one, else
+        the nearest stop -- erring toward closed is the right failure mode for
+        a window it may be raining on. An *open* request (anything above 0)
+        only ever considers stops above 0: snapping 55% to a 60% stop is
+        honest degradation, but a request to open must never fire the close
+        relay, even when that relay is the nearest contact to the target.
         """
-        if target <= 0 and self.close_switch:
-            return ContactStop(entity_id=self.close_switch, position=0)
-        candidates = list(self.stops)
-        if self.close_switch:
-            candidates.append(ContactStop(entity_id=self.close_switch, position=0))
+        if target <= 0:
+            if self.close_switch:
+                return ContactStop(entity_id=self.close_switch, position=0)
+            candidates = list(self.stops)
+        else:
+            candidates = [stop for stop in self.stops if stop.position > 0]
         if not candidates:
             return None
+        # Ties go to the lower position, erring toward closing.
         return min(candidates, key=lambda stop: (abs(stop.position - target), stop.position))
 
     @property

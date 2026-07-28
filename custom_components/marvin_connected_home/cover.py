@@ -92,14 +92,24 @@ class MarvinSashCover(MarvinAssetEntity, CoverEntity):
 
     @property
     def supported_features(self) -> CoverEntityFeature:
-        features = CoverEntityFeature.OPEN | CoverEntityFeature.CLOSE
         if not self._degraded:
-            return features | CoverEntityFeature.SET_POSITION | CoverEntityFeature.STOP
-        # On contacts, positioning still works but snaps to the configured stops,
-        # and stop only exists if terminal 2 was wired.
+            return (
+                CoverEntityFeature.OPEN
+                | CoverEntityFeature.CLOSE
+                | CoverEntityFeature.SET_POSITION
+                | CoverEntityFeature.STOP
+            )
+        # On contacts, each feature exists only if a contact can actually serve
+        # it: close needs any contact (erring toward closed is safe), open needs
+        # a stop above 0 -- a close contact alone must not masquerade as open --
+        # positioning snaps to the configured stops, and stop only exists if
+        # terminal 2 was wired.
         fallback = self._fallback
-        if fallback.stops:
-            features |= CoverEntityFeature.SET_POSITION
+        features = CoverEntityFeature(0)
+        if fallback.configured:
+            features |= CoverEntityFeature.CLOSE
+        if fallback.can_open:
+            features |= CoverEntityFeature.OPEN | CoverEntityFeature.SET_POSITION
         if fallback.can_stop:
             features |= CoverEntityFeature.STOP
         return features
@@ -228,6 +238,11 @@ class MarvinSashCover(MarvinAssetEntity, CoverEntity):
         fallback = self._fallback
         stop = fallback.resolve(position)
         if stop is None:
+            if position > 0 and fallback.configured:
+                raise HomeAssistantError(
+                    "The Marvin cloud is unreachable and only a close contact is "
+                    "wired for this window, so it cannot be opened right now"
+                )
             raise HomeAssistantError(
                 "The Marvin cloud is unreachable and no dry contacts are "
                 "configured for this window"
