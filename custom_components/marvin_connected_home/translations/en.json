@@ -127,6 +127,14 @@
       },
       "outdoor_conditions": {
         "name": "Outdoor conditions"
+      },
+      "control_path": {
+        "name": "Control path",
+        "state": {
+          "cloud": "Marvin cloud",
+          "dry_contact": "Dry contacts",
+          "unavailable": "Unavailable"
+        }
       }
     },
     "switch": {
@@ -142,6 +150,41 @@
       "auto_venting": {
         "name": "Auto venting"
       }
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Dry-contact fallback",
+        "description": "Marvin's windows have momentary dry contacts that work with no network at all. If you have wired them to switch entities, Home Assistant can use them when the Marvin cloud is unreachable.\n\nThis is entirely optional \u2014 leave it empty and nothing will ever pulse a relay.\n\nChoose a window to configure.",
+        "data": {
+          "asset": "Window"
+        }
+      },
+      "window": {
+        "title": "Dry contacts for {window}",
+        "description": "Pick the switch entity wired to each contact, and the position that contact drives the sash to.\n\nThe percentages are pre-filled from the window's own configuration, but the mapping between those settings and the physical terminals is undocumented \u2014 **check them against your wiring**. Fire one relay channel and see where the sash ends up.\n\nLeave a row blank if that contact is not wired. A 4-wire run typically has close plus three open positions and no stop.",
+        "data": {
+          "close_switch": "Close and lock (terminal 6)",
+          "position_1_switch": "Open position 1 switch (terminal 5)",
+          "position_1_percent": "Position 1 percentage",
+          "position_2_switch": "Open position 2 switch (terminal 4)",
+          "position_2_percent": "Position 2 percentage",
+          "position_3_switch": "Open position 3 switch (terminal 3)",
+          "position_3_percent": "Position 3 percentage",
+          "stop_switch": "Stop (terminal 2, often not wired)",
+          "contact_sensor": "Sash contact sensor (optional)",
+          "pulse_duration": "Pulse duration in seconds (0 if the switch pulses itself)",
+          "notify_on_switchover": "Notify when falling back to dry contacts"
+        },
+        "data_description": {
+          "contact_sensor": "Without one, position and open/closed report as unknown while the cloud is down. Home Assistant will not guess.",
+          "pulse_duration": "Contacts are edge-triggered, so this only has to be long enough for the relay to actuate."
+        }
+      }
+    },
+    "abort": {
+      "no_sashes": "No windows with a movable sash were found."
     }
   }
 }

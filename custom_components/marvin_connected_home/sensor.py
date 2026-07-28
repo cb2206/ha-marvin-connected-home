@@ -27,7 +27,7 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from marvin_connected_home import Device, Environment
 
-from .const import DOMAIN
+from .const import DOMAIN, PATH_CLOUD, PATH_DRY_CONTACT, PATH_UNAVAILABLE
 from .coordinator import MarvinCoordinator
 from .entity import MarvinAssetEntity
 
@@ -202,6 +202,37 @@ def _aware(value: datetime | None) -> datetime | None:
     return value if value.tzinfo else value.replace(tzinfo=UTC)
 
 
+class MarvinControlPathSensor(MarvinAssetEntity, SensorEntity):
+    """Which path is currently in use: cloud, dry contacts, or neither.
+
+    Exists regardless of the notification setting so automations can branch on
+    degradation, and so the state is visible at a glance rather than only in a
+    notification the user may have missed.
+    """
+
+    _attr_translation_key = "control_path"
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+    _attr_device_class = SensorDeviceClass.ENUM
+    _attr_options = [PATH_CLOUD, PATH_DRY_CONTACT, PATH_UNAVAILABLE]
+
+    def __init__(self, coordinator: MarvinCoordinator, asset_id: str) -> None:
+        super().__init__(coordinator, asset_id, "control_path")
+
+    @property
+    def available(self) -> bool:
+        # Must stay available precisely when things are degraded -- that is when
+        # it carries information.
+        return True
+
+    @property
+    def native_value(self) -> str:
+        if self.coordinator.device_reachable(self._asset_id):
+            return PATH_CLOUD
+        if self.coordinator.fallback_for(self._asset_id).configured:
+            return PATH_DRY_CONTACT
+        return PATH_UNAVAILABLE
+
+
 async def async_setup_entry(
     hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback
 ) -> None:
@@ -219,6 +250,12 @@ async def async_setup_entry(
         # entity that will only ever be unknown.
         if not description.key.startswith("fw_") or description.value_fn(device)
     ]
+
+    entities.extend(
+        MarvinControlPathSensor(coordinator, asset.asset_id)
+        for asset in house.assets
+        if (device := asset.primary) is not None and device.capabilities.sash
+    )
 
     # These are created unconditionally. On accounts where the Air Algorithm is
     # not populating them every reading is a sentinel, which the client maps to

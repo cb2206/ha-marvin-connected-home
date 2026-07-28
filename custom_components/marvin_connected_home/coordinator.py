@@ -24,7 +24,8 @@ from marvin_connected_home import (
     MarvinRealtime,
 )
 
-from .const import DOMAIN, SCAN_INTERVAL_SECONDS
+from .const import CONF_FALLBACK, DOMAIN, SCAN_INTERVAL_SECONDS
+from .fallback import FallbackConfig
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -49,8 +50,38 @@ class MarvinCoordinator(DataUpdateCoordinator[House]):
         )
         self.client = client
         self.house_id = house_id
+        self.entry = entry
         self._realtime = realtime
         self._unsubscribe: list[callable] = []
+
+    # -- control path ---------------------------------------------------
+
+    @property
+    def cloud_available(self) -> bool:
+        """Whether the Marvin cloud is currently reachable."""
+        return self.last_update_success
+
+    def fallback_for(self, asset_id: str) -> FallbackConfig:
+        """The user's dry-contact wiring for *asset_id*, if any.
+
+        Read fresh from the entry options each time so an options-flow change
+        takes effect without a reload.
+        """
+        configured = self.entry.options.get(CONF_FALLBACK) or {}
+        return FallbackConfig.parse(configured.get(asset_id))
+
+    def device_reachable(self, asset_id: str) -> bool:
+        """Whether cloud commands can be expected to reach this asset.
+
+        A device that reports itself offline will accept a command into the void
+        -- the API returns success but nothing moves -- so treat that as
+        unreachable and let the caller fall back.
+        """
+        if not self.cloud_available:
+            return False
+        asset = self.asset(asset_id)
+        device = asset.primary if asset else None
+        return device is not None and device.online is not False
 
     async def _async_update_data(self) -> House:
         try:
