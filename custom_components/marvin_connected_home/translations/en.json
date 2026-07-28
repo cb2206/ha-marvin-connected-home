@@ -135,6 +135,9 @@
           "dry_contact": "Dry contacts",
           "unavailable": "Unavailable"
         }
+      },
+      "fallback_summary": {
+        "name": "Dry contact fallback"
       }
     },
     "switch": {

@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime
+from typing import Any
 
 from homeassistant.components.sensor import (
     SensorDeviceClass,
@@ -194,6 +195,71 @@ def _aware(value: datetime | None) -> datetime | None:
     return value if value.tzinfo else value.replace(tzinfo=UTC)
 
 
+class MarvinFallbackSummarySensor(MarvinAssetEntity, SensorEntity):
+    """Human-readable summary of this window's dry-contact wiring.
+
+    Exists purely for discoverability. The mapping is set in an options flow,
+    which is several clicks away and easy to forget the location of, so the
+    current configuration is surfaced on the device page itself along with a
+    pointer to where it is changed.
+    """
+
+    _attr_translation_key = "fallback_summary"
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+
+    def __init__(self, coordinator: MarvinCoordinator, asset_id: str) -> None:
+        super().__init__(coordinator, asset_id, "fallback_summary")
+
+    @property
+    def available(self) -> bool:
+        # Most useful when the window itself is unreachable, so never follow
+        # the device's availability.
+        return True
+
+    @property
+    def native_value(self) -> str:
+        fallback = self.coordinator.fallback_for(self._asset_id)
+        if not fallback.configured:
+            return "Not configured"
+        positions = ", ".join(f"{p}%" for p in fallback.available_positions)
+        return f"{positions} (no stop)" if not fallback.can_stop else positions
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        fallback = self.coordinator.fallback_for(self._asset_id)
+        attributes: dict[str, Any] = {
+            "configure_at": (
+                "Settings > Devices & services > Marvin Connected Home > "
+                "Configure > pick this window"
+            )
+        }
+        if not fallback.configured:
+            attributes["status"] = (
+                "No dry contacts configured. Cloud outages will leave this "
+                "window uncontrollable from Home Assistant."
+            )
+            return attributes
+
+        if fallback.close_switch:
+            attributes["close_and_lock"] = f"{fallback.close_switch} -> 0%"
+        for index, stop in enumerate(fallback.stops, start=1):
+            attributes[f"open_position_{index}"] = (
+                f"{stop.entity_id} -> {stop.position}%"
+            )
+        attributes["stop"] = fallback.stop_switch or "not wired"
+        attributes["sash_contact_sensor"] = (
+            fallback.contact_sensor
+            or "none - position reports unknown during a cloud outage"
+        )
+        attributes["pulse_duration_seconds"] = (
+            "0 (switch pulses itself)"
+            if fallback.pulse_duration == 0
+            else fallback.pulse_duration
+        )
+        attributes["notify_on_switchover"] = fallback.notify_on_switchover
+        return attributes
+
+
 class MarvinControlPathSensor(MarvinAssetEntity, SensorEntity):
     """Which path is currently in use: cloud, dry contacts, or neither.
 
@@ -243,11 +309,12 @@ async def async_setup_entry(
         if not description.key.startswith("fw_") or description.value_fn(device)
     ]
 
-    entities.extend(
-        MarvinControlPathSensor(coordinator, asset.asset_id)
-        for asset in house.assets
-        if (device := asset.primary) is not None and device.capabilities.sash
-    )
+    for asset in house.assets:
+        device = asset.primary
+        if device is None or not device.capabilities.sash:
+            continue
+        entities.append(MarvinControlPathSensor(coordinator, asset.asset_id))
+        entities.append(MarvinFallbackSummarySensor(coordinator, asset.asset_id))
 
     # These are created unconditionally. On accounts where the Air Algorithm is
     # not populating them every reading is a sentinel, which the client maps to
