@@ -52,11 +52,23 @@
       },
       "closed_sensor": {
         "name": "Closed sensor"
+      },
+      "fault": {
+        "name": "Fault"
+      },
+      "open_condition_met": {
+        "name": "Open condition met"
       }
     },
     "button": {
       "check_firmware": {
         "name": "Check for firmware update"
+      },
+      "reboot": {
+        "name": "Reboot"
+      },
+      "recalibrate": {
+        "name": "Recalibrate"
       }
     },
     "cover": {
@@ -73,6 +85,18 @@
       },
       "contact_position_3": {
         "name": "Contact position 3"
+      },
+      "temperature_lower_limit": {
+        "name": "Auto venting temperature low"
+      },
+      "temperature_upper_limit": {
+        "name": "Auto venting temperature high"
+      },
+      "humidity_lower_limit": {
+        "name": "Auto venting humidity low"
+      },
+      "humidity_upper_limit": {
+        "name": "Auto venting humidity high"
       }
     },
     "sensor": {
@@ -140,6 +164,12 @@
       },
       "fallback_summary": {
         "name": "Dry contacts"
+      },
+      "indoor_air_quality": {
+        "name": "Indoor air quality"
+      },
+      "outdoor_air_quality": {
+        "name": "Outdoor air quality"
       }
     },
     "switch": {
@@ -154,6 +184,27 @@
       },
       "auto_venting": {
         "name": "Auto venting"
+      },
+      "temperature_open_if": {
+        "name": "Open on temperature"
+      },
+      "temperature_close_if": {
+        "name": "Close on temperature"
+      },
+      "humidity_open_if": {
+        "name": "Open on humidity or dew point"
+      },
+      "humidity_close_if": {
+        "name": "Close on humidity or dew point"
+      }
+    },
+    "select": {
+      "moisture_metric": {
+        "name": "Auto venting moisture metric",
+        "state": {
+          "humidity": "Humidity",
+          "dew_point": "Dew point"
+        }
       }
     }
   },

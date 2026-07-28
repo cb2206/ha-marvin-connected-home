@@ -50,6 +50,7 @@ One device per window, plus one for the house.
 | Rain detected | Per-device rain sensor |
 | Obstruction | Only if an e-brake is fitted |
 | Running on backup power | Mains lost; running from supercapacitors |
+| Fault | On when the window reports one or more errors |
 | Closed sensor | Only if enabled on the unit |
 | Close when raining / On-window sound / On-window switch LED | Writable configuration |
 | Contact position 1/2/3 | Writable dry-contact stop percentages |
@@ -58,12 +59,31 @@ One device per window, plus one for the house.
 | Control path | `Marvin cloud` / `Dry contacts` / `Unavailable` |
 | Dry contacts | Summary of the fallback wiring, and where to change it |
 | Check for firmware update | Button |
+| Reboot | Button — restarts the controller, does not move the sash |
+| Recalibrate | Button — **disabled by default**, see below |
 
 A window reports **four independent firmware versions** and they genuinely differ (window control board, on-unit control, rain sensor, motor control board, plus a remote if paired). Collapsing them to one number would mislead anyone debugging board-specific behaviour, so each is its own sensor. The device's `sw_version` is the window control board, since that is the one owners track.
 
 ### Per house
 
-Auto venting, away mode, and indoor/outdoor temperature, humidity, dew point, CO₂, VOC, PM2.5 and conditions. Plus **All windows**, a house-wide broadcast cover.
+Auto venting and its full configuration, plus indoor/outdoor temperature, humidity, dew point, CO₂, VOC, PM2.5, air quality and conditions, an **Open condition met** diagnostic showing whether Marvin's Air Algorithm currently wants the windows open, and **All windows**, a house-wide broadcast cover.
+
+Auto venting is configurable end to end, matching the app:
+
+| Entity | |
+|---|---|
+| Auto venting | Master switch |
+| Open on / Close on temperature | Whether temperature participates |
+| Open on / Close on humidity or dew point | Whether moisture participates |
+| Auto venting temperature low / high | Thresholds, °F |
+| Auto venting humidity low / high | Thresholds, % |
+| Auto venting moisture metric | Humidity or dew point |
+
+**Dew-point thresholds must be set in the Marvin app.** Selecting dew point as the metric works from Home Assistant, but Marvin's API uses a different, uncaptured key name for its limits — and this integration does not ship guessed request bodies. The humidity thresholds are fully writable.
+
+Auto venting and its limits update the moment they change in the Marvin app — the cloud pushes them, so there is no polling delay.
+
+**Temperatures are reported in Fahrenheit**, which is what the API returns; Home Assistant converts to whatever unit you have configured. Marvin publishes no unit setting and sells only into the US and Canada.
 
 ## Dry-contact fallback
 
@@ -104,9 +124,45 @@ A cloud command that fails on *connectivity* falls back. One that fails on auth 
 | Modern Automated Multi-Slide Door | Best-effort, untested |
 | CLiC privacy glass | Best-effort, untested |
 
-Entities are created from the capability flags each device reports, so unsupported hardware yields no entity rather than a broken one. If you own something in the untested rows, bug reports are welcome.
+Entities are created from the capability flags each device reports, so unsupported hardware yields no entity rather than a broken one.
 
-**Reboot and Recalibrate are not implemented.** Both exist in the Marvin app, but neither endpoint has been captured, and sending a guessed request body to a live endpoint attached to a motorised window is not a reasonable trade.
+### If your setup has more than this covers
+
+This integration was reverse-engineered from **one account with three casement/awning windows**. Everything here was verified by watching what the Marvin app actually sends — nothing is implemented on a guess, which is the reason some features Marvin's app offers are absent rather than half-working.
+
+That means the gaps are shaped by one person's hardware, not by what the platform can do. If you own Awaken skylights, a Multi-Slide door, CLiC privacy glass, server-side groups, or anything else that produces no entity or a wrong one:
+
+- **Open an issue** with a [diagnostics download](https://www.home-assistant.io/docs/configuration/troubleshooting/#download-diagnostics) (Settings → Devices & services → Marvin Connected Home → ⋮ → Download diagnostics). It is redacted of tokens, email, MAC, IP and UUIDs, and it contains the capability flags and raw state your hardware reports — which is usually enough to add support without owning the hardware.
+- **Or open a PR.** `scripts/capture/` has the tooling used to capture the API in the first place: an Android emulator with mitmproxy, a redacting addon, and an analyser that diffs what the app sent against what API.md already documents. RESEARCH.md documents the setup end to end.
+
+Some things Marvin's app does are deliberately not implemented:
+
+| Not implemented | Why |
+|---|---|
+| Notification preferences | They configure push notifications to the **Marvin phone app**. Home Assistant never receives those, so mirroring the toggles would configure a channel it cannot see. Notify off the rain, obstruction and fault entities instead — better routing, same triggers. |
+| Event history | Marvin's feed contains only *window opened / closed / locked / unlocked / sensed rain* — all of which are already entities here, updated sub-second and recorded in the logbook. |
+| Server-side groups | Groups have no command endpoint; the app fans out to per-window commands client-side. Home Assistant's areas, labels and groups do the same job without a sync problem. |
+| Away mode | Read-only, and only present on an endpoint this integration does not poll. See DESIGN.md. |
+| Schedules | Despite constants in the app bundle, no schedule endpoint exists. Home Assistant's automations cover this. |
+
+Full reasoning is in DESIGN.md's non-goals. If you have a use case that changes it, say so in an issue.
+
+### Recalibrate
+
+**Recalibrate drives the sash through its full travel range** — the window opens completely and closes again. That is fine when you are standing in front of it and unwelcome when you are not.
+
+Home Assistant has no per-entity confirmation, so the button ships **disabled by default**. Enable it on the device page when you want it. If you put it on a dashboard, guard it:
+
+```yaml
+type: button
+entity: button.primary_awning_recalibrate
+confirmation:
+  text: Recalibrate? The window will open fully and close again.
+```
+
+Reboot restarts the window controller and does not move the sash, but it does take the window offline for about a minute.
+
+Both are fire-and-forget: Home Assistant reports success when Marvin's cloud accepts the command, not when the window finishes acting on it. Watch the window's own state to see the outcome.
 
 ## Notes
 
@@ -125,6 +181,8 @@ python -m pytest tests/
 ```
 
 Never commit `.mitm` capture files — they contain live bearer tokens. `.gitignore` covers them.
+
+The integration currently shows Home Assistant's placeholder icon. Logos are served from `brands.home-assistant.io`, not from this repo, so the artwork in [brands/custom_integrations/marvin_connected_home/](brands/custom_integrations/marvin_connected_home/) has to be submitted to [home-assistant/brands](https://github.com/home-assistant/brands) before it appears — see that directory's README.
 
 See [API.md](API.md) for the reverse-engineered API reference, [DESIGN.md](DESIGN.md) for entity design and open questions, and [RESEARCH.md](RESEARCH.md) for how the platform was worked out.
 

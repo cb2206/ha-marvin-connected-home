@@ -94,6 +94,7 @@ class MarvinCoordinator(DataUpdateCoordinator[House]):
 
     async def async_start_realtime(self) -> None:
         self._unsubscribe.append(self._realtime.on_asset_update(self._handle_asset_update))
+        self._unsubscribe.append(self._realtime.on_house_update(self._handle_house_update))
         await self._realtime.async_start()
 
     async def async_shutdown(self) -> None:
@@ -122,6 +123,24 @@ class MarvinCoordinator(DataUpdateCoordinator[House]):
                 break
         else:
             self.data.assets.append(asset)
+        self.async_set_updated_data(self.data)
+
+    @callback
+    def _handle_house_update(self, house: House) -> None:
+        """Apply a pushed ``PreferencesUpdated`` to the cached house.
+
+        Only the house-level fields are copied across. The payload carries
+        ``assets: null`` and ``state: null``, so replacing ``self.data``
+        wholesale would drop every window until the next poll -- five minutes
+        of unavailable covers from a preference toggle.
+        """
+        if self.data is None or house.house_id != self.house_id:
+            return
+        self.data.auto_venting_enabled = house.auto_venting_enabled
+        self.data.open_condition_met = house.open_condition_met
+        self.data.preferences = house.preferences
+        # `away_mode` deliberately not copied: it lives under `state`, which
+        # this payload nulls, so a push would always clear it.
         self.async_set_updated_data(self.data)
 
     def asset(self, asset_id: str) -> Asset | None:

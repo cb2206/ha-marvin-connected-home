@@ -4,10 +4,37 @@ from __future__ import annotations
 
 from homeassistant.helpers.device_registry import CONNECTION_NETWORK_MAC, DeviceInfo
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
-from marvin_connected_home import Asset, Device
+from marvin_connected_home import Asset, Device, House
 
 from .const import DOMAIN
 from .coordinator import MarvinCoordinator
+
+
+class MarvinHouseEntity(CoordinatorEntity[MarvinCoordinator]):
+    """Base for entities that belong to the house rather than to one window.
+
+    Auto venting and its limits are house-scoped in the API: there is one set
+    of thresholds for every window, not one per window.
+    """
+
+    _attr_has_entity_name = True
+
+    def __init__(self, coordinator: MarvinCoordinator, key: str) -> None:
+        super().__init__(coordinator)
+        self._attr_unique_id = f"{coordinator.house_id}_{key}"
+
+    @property
+    def house(self) -> House | None:
+        return self.coordinator.data
+
+    @property
+    def device_info(self) -> DeviceInfo:
+        house = self.house
+        return DeviceInfo(
+            identifiers={(DOMAIN, self.coordinator.house_id)},
+            manufacturer="Marvin",
+            name=house.name if house else "Marvin Connected Home",
+        )
 
 
 class MarvinAssetEntity(CoordinatorEntity[MarvinCoordinator]):

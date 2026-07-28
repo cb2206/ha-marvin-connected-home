@@ -36,7 +36,7 @@ Three different id forms are in play, and they are **not** interchangeable:
 |---|---|---|
 | Asset id | `Asset_<uuid>` | `setconfig`, `requestconfig`, `requeststatus`, rename, `commands` |
 | House id | `House_<uuid>` | `houses/*`, `preferences`, `commands` (house-wide) |
-| Internal device id | `eval3-<serial>` | `devices/performota` |
+| Internal device id | `eval3-<serial>` | `devices/performota`, `devices/gen2/reset/reboot`, `devices/gen2/activate/calibrate` |
 
 An asset contains one or more devices; the device carries the state and firmware.
 
@@ -77,16 +77,20 @@ The same double encoding appears in SignalR's `arguments[0]`, so it looks delibe
 | Method | Path | Notes |
 |---|---|---|
 | GET | `/users` | account, roles |
-| GET | `/houses` | house list |
-| GET | `/houses/{houseId}` | house-level only — `groupStates`, `preferences`, `environment`, plus **asset stubs** (`{id, name}`) |
+| GET | `/houses` | house list — populates `state`, **nulls `preferences`** |
+| GET | `/houses/{houseId}` | house-level only — `groupStates`, `preferences`, `environment`, plus **asset stubs** (`{id, name}`). Populates `preferences`, **nulls `state`** |
 | GET | `/houses/{houseId}/assets` | **full asset tree**, including nested `devices` and their state |
 | GET | `/assets/{assetId}` | flat device state for one asset (different key casing — see above) |
-| GET | `/defaults` | config defaults. Verified to contain **no** unit keys, so temperature units come from elsewhere |
+| GET | `/defaults` | returns literally `{"data": []}`. Empty, not merely unit-free |
 | GET | `/requestconfig/{assetId}` | current `configSettings` |
 | GET | `/requeststatus/{assetId}` | async command/config result |
 | GET | `/requeststatus/{houseId}` | house-scoped equivalent |
+| GET | `/houses/{houseId}/users` | house members |
+| GET | `/notificationpreferences/{houseId}` | push notification toggles |
 
 `GET /houses/{houseId}/assets/{assetId}` does **not** exist (404) — that path is PUT-only, for rename.
+
+**The list and detail endpoints are complementary, not redundant.** `GET /houses` fills `state` (`awayModeIsActive`, `halioMode`, `autoTintingIsActive`, `hasAutoTint`) and sets `preferences` to null; `GET /houses/{id}` does exactly the reverse. Neither is a superset, so a client that reads only one silently loses whole fields. `awayModeIsActive` in particular is **not reachable** from the detail endpoint.
 
 ### House payload layout
 
@@ -157,7 +161,86 @@ POST /houses/{houseId}/preferences
 → 200  Success
 ```
 
-Here booleans are **real JSON booleans**, unlike `setconfig`. Other preference keys (temperature/humidity/dew-point/AQ limits, `awayModeIsActive`) presumably use the same endpoint — unverified.
+Here booleans are **real JSON booleans**, unlike `setconfig`.
+
+**Several keys in one body are accepted** — the app posts `{"tempLowerLimit":65,"tempUpperLimit":77}` when a range slider moves, and single-key bodies for everything else. Both are verified. Sending both ends of a range together is worth copying: split across two requests, the house briefly holds `lower > upper`.
+
+#### The write key names are not the read key names
+
+Reading a house gives `temperatureUpperLimit`. Writing that back does nothing — the write spelling is `tempUpperLimit`.
+
+| Read as | Write as |
+|---|---|
+| `temperatureUpperLimit` | `tempUpperLimit` |
+| `temperatureLowerLimit` | `tempLowerLimit` |
+| `temperatureOpenIfEnabled` | `tempOpenIfEnabled` |
+| `temperatureCloseIfEnabled` | `tempCloseIfEnabled` |
+
+**Only the temperature keys are affected.** `humidityUpperLimit`, `humidityLowerLimit`, `humidityDewPointToggle`, `humidityDewPointOpenIfEnabled`, `humidityDewPointCloseIfEnabled` and `autoVentingEnabled` are spelled identically both ways. There is no rule to derive here — the abbreviation applies to `temperature` and to nothing that sits beside it.
+
+#### Verified writable keys
+
+`autoVentingEnabled`, `tempOpenIfEnabled`, `tempCloseIfEnabled`, `tempUpperLimit`, `tempLowerLimit`, `humidityDewPointOpenIfEnabled`, `humidityDewPointCloseIfEnabled`, `humidityUpperLimit`, `humidityLowerLimit`, `humidityDewPointToggle` (`"humidity"` | `"dew_point"`).
+
+#### Read-only in every capture so far
+
+`dewPointUpperLimit`, `dewPointLowerLimit`, `indoorAirQualityLowerLimit`, `indoorAirQualityOpenIfEnabled`, `outdoorAirQualityUpperLimit`, `outdoorAirQualityCloseIfEnabled`, `rainCloseIfEnabled`, `autoVentingOverrideExpiration`, `autoVentingOverrideMinutes`, `smartHomeIntegrationEnabled`, `openConditionMet`.
+
+The app never wrote these, so their write spellings are **unknown** — and given the `temperature`/`temp` asymmetry above, guessing them is not defensible. Capture before writing.
+
+Limits carry sentinels too: `dewPointUpperLimit: -2147483648` on an account that has never set one.
+
+### Notification preferences
+
+```http
+GET /notificationpreferences/{houseId}
+PUT /notificationpreferences/{houseId}
+{"windowRainIsDetected":true}
+→ 200
+```
+
+One key per request, same as house preferences. Keys: `windowObstructions`, `windowProductOffline`, `windowPowerloss`, `windowRainIsDetected`, `skylightProductOffline`, `skylightRainIsDetected`, `doorProductOffline`, `privacyGlassProductOffline`, `autoOpenOutdoorTemp`, `autoOpenHumidityDewPoint`, `autoCloseOutdoorTemp`, `autoCloseHumidityDewPoint`.
+
+`GET /notificationpreferences/screen/{windowNotifications|automationNotifications}` returns a server-driven UI description — nested `childControls` with `categoryKey`, `type` (`screenTitle`, `screenContainer`, `toggleSwitch`), `title`, `valueType` and `value`. Useful as an authoritative list of key names and their human labels.
+
+### House name and location
+
+```http
+PUT /houses/{houseId}
+{"houseName":"Inca","zipCode":"80303","latitude":"0","longitude":"0"}
+→ 200
+```
+
+Latitude and longitude are **strings**, and were `"0"` on an account with a real zip code set.
+
+### Event history
+
+```http
+POST /houses/{houseId}/events
+{}
+→ 200  {"data":[{"houseId":…,"assetId":…,"eventTime":"2026-07-28T14:08:05",
+                 "title":"Window locked","message":"Hannah has locked.",
+                 "imageURL":"https://…/eventhistoryicons/doorLock.png"}]}
+```
+
+A read that is a `POST` with an empty body. Newest first, `eventTime` is local and carries no timezone.
+
+### Groups
+
+```http
+GET  /houses/{houseId}/groups
+POST /houses/{houseId}/groups            {"groupName":"Bedrooms"}
+→ 200  Group_80b90d2c-…                  ← bare id string, not JSON
+
+PUT  /houses/{houseId}/groups/{groupId}
+{"groupName":"Bedrooms","assets":[{"assetId":"Asset_…"},…]}
+→ 200  {"data":[{…,"results":[{"assetId":"Asset_…","action":"add",
+                               "statusCode":200,"reasonPhrase":"OK"}]}]}
+```
+
+The `PUT` is declarative — send the full membership list and the server diffs it, reporting `add`/`remove` per asset.
+
+**Groups have no command endpoint.** Commanding a group in the app emits a single `POST /commands` whose array holds one entry per member asset; the fan-out is client-side. A group is an organisational label, nothing more.
 
 ### Firmware update
 
@@ -169,18 +252,29 @@ POST /devices/performota/{internalDeviceId}
 
 Takes the **internal device id**, not the asset id. Empty JSON body.
 
-### Reboot / Recalibrate — NOT CAPTURED
+### Reboot
 
-The app offers both. Neither was triggered, so both are unknown.
-
-**Placeholder assumption**, by analogy with `performota`:
-
-```
-POST /devices/reboot/{internalDeviceId}        {}
-POST /devices/recalibrate/{internalDeviceId}   {}
+```http
+POST /devices/gen2/reset/reboot/{internalDeviceId}
+{}
+→ 200  Reboot sent to device: 'eval3-…'
 ```
 
-**This is a guess and must not ship unverified** — a wrong path is harmless (404), but a wrong *body* against a real endpoint might not be. Action item: capture these.
+Does not move the sash. The device drops off Wi-Fi for roughly a minute — `deviceOnline` goes false and the app re-negotiates SignalR when it returns.
+
+### Recalibrate
+
+```http
+POST /devices/gen2/activate/calibrate/{internalDeviceId}
+{}
+→ 200  Successfully sent calibrate to device: 'eval3-…'
+```
+
+**This drives the sash through its full travel range** — the window opens completely and closes again. The endpoint is spelled `calibrate`; only the app's label says *Recalibrate*.
+
+Both take the **internal device id**, empty JSON body, `content-type: application/json`, and both are fire-and-forget — the response is a plain sentence with no request id, and the app polls nothing afterwards.
+
+> **On guessing paths.** Before capture, this file carried `POST /devices/reboot/{id}` and `POST /devices/recalibrate/{id}`, guessed by analogy with `performota`. **Both were wrong.** The real routes sit under a `gen2/` group that `performota` does not use, and are split across two different verbs (`reset/` vs `activate/`). Nothing about the shape of one endpoint here predicts another — capture, don't extrapolate.
 
 ---
 
@@ -199,11 +293,28 @@ Server-to-client methods:
 | Target | Payload |
 |---|---|
 | `AssetUpdated` | full asset JSON in every capture so far — but *observed*, not guaranteed, and `GET /houses/{id}` proves the API sends stub assets in other contexts. Consumers should merge over cached state (`merge_assets()`), not replace. |
+| `PreferencesUpdated` | the house document with `preferences` populated and **`assets` and `state` both null**. Merge the house-level fields; replacing the cached house drops every window. |
 | `HouseGroupStateUpdated` | group state |
+| `GroupStateUpdated` | per-group state |
+| `GroupListChanged` | fired on group create/delete |
 
-`arguments[0]` is a **JSON string**, not an object — parse twice.
+`arguments[0]` is a **JSON string**, not an object — parse twice. Every target observed shares the `{"data":[…]}` envelope inside that string.
 
 **Latency verified as sub-second, including out-of-band changes.** A dry-contact close (entirely outside the cloud) produced live progressive `sashOpen` updates and the final `windowLocked` confirmation. Position streams during travel, so intermediate values are real.
+
+## Units
+
+**Temperatures are Fahrenheit.** There is no unit key anywhere in the API — `/defaults`, the obvious candidate, returns `{"data": []}`.
+
+The evidence:
+
+- auto-venting limits come back as 54–77, a sensible venting band in Fahrenheit and nonsense in Celsius;
+- setting the Android device's own unit preference to Celsius did not change what the app displayed, so the app is not converting either;
+- Marvin sells into the US and Canada only.
+
+Strong, but circumstantial — it rests on a single US account. If a Canadian or metric-preferring account ever reports Celsius, this is per-account and not a constant.
+
+Humidity is a percentage. `indoorAirQuality` / `outdoorAirQuality` are a Marvin-defined index of unknown scale — not a standard AQI, and worth not presenting as one.
 
 ## Sentinel values
 

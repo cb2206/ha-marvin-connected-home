@@ -228,6 +228,21 @@ This is the app's **public** client registration — the same values any copy of
 - Proxy: `settings put global http_proxy 10.0.2.x:8080`; React Native uses OkHttp, which honours it
 - **No Play Integrity block** — the app runs normally on the emulator, so rooting the moto is not needed
 
+**Scripted.** None of the CA work survives a reboot, and it is too fiddly to retype, so it lives in `scripts/capture/`:
+
+```bash
+~/Library/Android/sdk/emulator/emulator -avd marvin_cap -writable-system &
+./scripts/capture/install-ca.sh                     # after every cold boot
+mitmdump -s scripts/capture/marvin_addon.py -w captures/marvin.mitm \
+         --set jsonl=captures/marvin.jsonl --listen-host 0.0.0.0 --listen-port 8080 &
+adb shell settings put global http_proxy 10.0.2.2:8080
+./scripts/capture/show-actions.sh                   # read the result back
+```
+
+The addon writes two files: the raw `.mitm` (live bearer tokens — never commit) and a JSONL with credentials stripped but request/response shapes intact, which is what gets quoted into API.md. `captures/` is gitignored; promote lines out of it deliberately.
+
+The app's session persists in the AVD across reboots, so re-capture usually needs no login.
+
 ### Captured API surface (live)
 
 Base: `https://azapi.marvin.com/mch-prd/1.0/`

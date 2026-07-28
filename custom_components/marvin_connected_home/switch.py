@@ -18,7 +18,7 @@ from marvin_connected_home import Device, MarvinError
 
 from .const import DOMAIN
 from .coordinator import MarvinCoordinator
-from .entity import MarvinAssetEntity
+from .entity import MarvinAssetEntity, MarvinHouseEntity
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -57,6 +57,38 @@ SWITCHES: tuple[MarvinSwitchDescription, ...] = (
 )
 
 
+@dataclass(frozen=True, kw_only=True)
+class MarvinPreferenceSwitchDescription(SwitchEntityDescription):
+    """An auto-venting condition toggle, stored per house."""
+
+    #: Preference key as spelled when *reading* a house.
+    preference_key: str
+
+
+PREFERENCE_SWITCHES: tuple[MarvinPreferenceSwitchDescription, ...] = (
+    MarvinPreferenceSwitchDescription(
+        key="temperature_open_if",
+        translation_key="temperature_open_if",
+        preference_key="temperatureOpenIfEnabled",
+    ),
+    MarvinPreferenceSwitchDescription(
+        key="temperature_close_if",
+        translation_key="temperature_close_if",
+        preference_key="temperatureCloseIfEnabled",
+    ),
+    MarvinPreferenceSwitchDescription(
+        key="humidity_open_if",
+        translation_key="humidity_open_if",
+        preference_key="humidityDewPointOpenIfEnabled",
+    ),
+    MarvinPreferenceSwitchDescription(
+        key="humidity_close_if",
+        translation_key="humidity_close_if",
+        preference_key="humidityDewPointCloseIfEnabled",
+    ),
+)
+
+
 async def async_setup_entry(
     hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback
 ) -> None:
@@ -72,6 +104,10 @@ async def async_setup_entry(
         for description in SWITCHES
     ]
     entities.append(MarvinAutoVentingSwitch(coordinator))
+    entities += [
+        MarvinPreferenceSwitch(coordinator, description)
+        for description in PREFERENCE_SWITCHES
+    ]
     async_add_entities(entities)
 
 
@@ -148,4 +184,47 @@ class MarvinAutoVentingSwitch(CoordinatorEntity[MarvinCoordinator], SwitchEntity
             )
         except MarvinError as err:
             raise HomeAssistantError(f"Could not change auto venting: {err}") from err
+        await self.coordinator.async_request_refresh()
+
+
+class MarvinPreferenceSwitch(MarvinHouseEntity, SwitchEntity):
+    """Whether a metric participates in auto venting.
+
+    Config category rather than a plain control: unlike the auto-venting master
+    switch, these only shape *how* the algorithm decides, and do nothing at all
+    while auto venting is off.
+    """
+
+    entity_description: MarvinPreferenceSwitchDescription
+
+    _attr_entity_category = EntityCategory.CONFIG
+
+    def __init__(
+        self, coordinator: MarvinCoordinator, description: MarvinPreferenceSwitchDescription
+    ) -> None:
+        super().__init__(coordinator, description.key)
+        self.entity_description = description
+
+    @property
+    def is_on(self) -> bool | None:
+        house = self.house
+        if house is None:
+            return None
+        value = house.preferences.get(self.entity_description.preference_key)
+        return value if isinstance(value, bool) else None
+
+    async def async_turn_on(self, **kwargs: Any) -> None:
+        await self._async_write(True)
+
+    async def async_turn_off(self, **kwargs: Any) -> None:
+        await self._async_write(False)
+
+    async def _async_write(self, enabled: bool) -> None:
+        try:
+            await self.coordinator.client.async_set_house_preferences(
+                self.coordinator.house_id,
+                **{self.entity_description.preference_key: enabled},
+            )
+        except MarvinError as err:
+            raise HomeAssistantError(f"Could not change the venting condition: {err}") from err
         await self.coordinator.async_request_refresh()

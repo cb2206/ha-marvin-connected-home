@@ -1,51 +1,17 @@
 """Tests for dry-contact fallback selection logic.
 
-These stub the few Home Assistant symbols `fallback` imports so the pure
-decision logic can be exercised without a Home Assistant install, and without
-any hardware or a simulated cloud outage.
+The Home Assistant symbols `fallback` imports are stubbed in `conftest.py`, so
+the pure decision logic can be exercised without a Home Assistant install, and
+without any hardware or a simulated cloud outage.
 
     python -m pytest tests/
 """
 
 from __future__ import annotations
 
-import sys
-import types
-from pathlib import Path
+import importlib
 
 import pytest
-
-# --- minimal homeassistant stubs -----------------------------------------
-
-_const = types.ModuleType("homeassistant.const")
-_const.ATTR_ENTITY_ID = "entity_id"
-_const.STATE_ON = "on"
-_const.STATE_UNAVAILABLE = "unavailable"
-_const.STATE_UNKNOWN = "unknown"
-
-_core = types.ModuleType("homeassistant.core")
-
-
-class _HomeAssistant:  # noqa: D101 - stub
-    pass
-
-
-_core.HomeAssistant = _HomeAssistant
-
-_ha = types.ModuleType("homeassistant")
-_ha.__path__ = []  # let `homeassistant.const` resolve as a submodule
-sys.modules.setdefault("homeassistant", _ha)
-sys.modules.setdefault("homeassistant.const", _const)
-sys.modules.setdefault("homeassistant.core", _core)
-
-# Stand in for the real package so importing a submodule does not execute
-# __init__.py, which pulls in the whole Home Assistant framework.
-_COMPONENT = Path(__file__).resolve().parent.parent / "custom_components" / "marvin_connected_home"
-_pkg = types.ModuleType("marvin_connected_home")
-_pkg.__path__ = [str(_COMPONENT)]
-sys.modules.setdefault("marvin_connected_home", _pkg)
-
-import importlib  # noqa: E402
 
 _fallback = importlib.import_module("marvin_connected_home.fallback")
 ContactStop = _fallback.ContactStop

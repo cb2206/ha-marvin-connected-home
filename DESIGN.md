@@ -59,7 +59,7 @@ Never assume a field exists. Never assume a type. Sentinels (below) are not the 
 
 - **Multiple houses.** Accounts can hold several (`Select House` exists in the Control4 driver). Config flow must let the user choose, and support more than one.
 - **Roles.** `role`, `roles`, `userrole`, `adminApp` appear in the API — a guest or non-admin user may be unable to write config or command devices. Surface permission failures as a clear error, not a silent no-op.
-- **Units.** Temperature may be °C or °F per account/region. Must be determined, not assumed — see open questions.
+- **Units.** Determined, not assumed: temperatures are **Fahrenheit**. There is no unit field in the API and Marvin sells into the US and Canada only. Established on one account — see open questions.
 
 ---
 
@@ -161,12 +161,12 @@ These ship writable in v1, `hA*Position` included.
 | Entity | Endpoint | Status |
 |---|---|---|
 | Check for firmware update | `POST /devices/performota/{deviceId}` `{}` | **Verified** |
-| Reboot | `POST /devices/reboot/{deviceId}` `{}` | **Unverified placeholder — do not ship** |
-| Recalibrate | `POST /devices/recalibrate/{deviceId}` `{}` | **Unverified placeholder — do not ship** |
+| Reboot | `POST /devices/gen2/reset/reboot/{deviceId}` `{}` | **Verified** |
+| Recalibrate | `POST /devices/gen2/activate/calibrate/{deviceId}` `{}` | **Verified** |
 
-These take the **internal device id** (`eval3-…`), not the asset id.
+These take the **internal device id** (`eval3-…`), not the asset id. All three are fire-and-forget: a plain-text acknowledgement, no request id, nothing to poll. A successful press means the cloud accepted the command, not that the device carried it out — the outcome arrives later over SignalR.
 
-Reboot and recalibrate stay behind a flag until captured. Recalibrate in particular drives the sash through a full travel cycle, so it should carry a confirmation in the UI even once verified.
+Recalibrate drives the sash through a full travel cycle, which makes an accidental press expensive: a bedroom window opens fully and closes again, possibly while nobody is home. Home Assistant has no per-entity confirmation, so it ships with `entity_registry_enabled_default=False` — an owner has to enable it deliberately, and the README asks for a `confirmation:` block on any dashboard card exposing it. That is weaker than a real dialog, and it is the strongest guard the entity model offers.
 
 ---
 
@@ -191,11 +191,43 @@ HA convention is that renaming an entity is local and does not propagate upstrea
 | Entity | Source | Notes |
 |---|---|---|
 | Auto venting | `autoVentingEnabled` | switch |
-| Away mode | `awayModeIsActive` | switch |
+| Open on / Close on temperature | `temperatureOpenIfEnabled`, `temperatureCloseIfEnabled` | switch, config |
+| Open on / Close on humidity or dew point | `humidityDewPointOpenIfEnabled`, `humidityDewPointCloseIfEnabled` | switch, config |
+| Auto venting temperature low / high | `temperatureLowerLimit`, `temperatureUpperLimit` | `number` °F, config |
+| Auto venting humidity low / high | `humidityLowerLimit`, `humidityUpperLimit` | `number` %, config |
+| Auto venting moisture metric | `humidityDewPointToggle` | `select` — humidity or dew point |
 | Open condition met | `openConditionMet` | binary_sensor, diagnostic |
-| Indoor temp / humidity / dew point / VOC / AQI | house state | sensors |
-| Outdoor temp / humidity / dew point / AQI | house state | sensors |
+| Indoor temp / humidity / dew point / CO₂ / VOC / PM2.5 / air quality | `environment` | sensors |
+| Outdoor temp / humidity / dew point / air quality | `environment` | sensors |
 | Outdoor conditions | `outdoorConditionsDesc` | sensor |
+
+**Away mode is deliberately not an entity.** `awayModeIsActive` exists, but only in
+`GET /houses` under `state` — and that endpoint nulls `preferences`, while
+`GET /houses/{id}` (which the coordinator uses) nulls `state`. Surfacing it would
+mean a second request on every poll for one boolean that the app itself offers no
+way to change. It also sits among `halioMode`, `autoTintingIsActive` and
+`hasAutoTint`, which suggests it belongs to CLiC privacy glass rather than to
+windows. `House.away_mode` is parsed and available to anyone who wants it; no
+entity is created.
+
+Temperatures are **Fahrenheit** — see API.md's units section.
+
+**Write keys are not read keys.** These entities all store the *read* spelling
+(`temperatureUpperLimit`); the client translates to the write spelling
+(`tempUpperLimit`) on the way out. Storing the write spelling would round-trip
+through the client fine and then match nothing on read, leaving the entity
+permanently unknown. Only the four temperature keys differ.
+
+**Dew-point limits are not writable.** `humidityDewPointToggle` switches the
+algorithm between relative humidity and dew point, and both values are verified
+writes. But the app never wrote `dewPointUpperLimit` / `dewPointLowerLimit`
+during capture, so their write spellings are unknown — and after the
+`temperature` → `temp` surprise, guessing is not defensible. Selecting dew point
+works; setting its thresholds needs the Marvin app. Documented on the `select`
+entity itself.
+
+Unset limits arrive as the int sentinel (`-2147483648`), so the `number`
+entities map that to unknown rather than rendering minus two billion.
 
 ### Sentinel handling — mandatory
 
@@ -294,7 +326,10 @@ noted below.
 | SignalR real-time push | **Verified** |
 | Diagnostics download with redaction | Implemented |
 | Dry-contact fallback | Implemented; selection logic unit-tested, **failover never executed against real relays** |
-| Reboot / recalibrate buttons | **Not shipped** — endpoints uncaptured |
+| Reboot / recalibrate buttons | **Verified** — recalibrate disabled by default |
+| Auto-venting preference writes | **Verified** — note the `temp*` / `temperature*` read-write key asymmetry |
+| `PreferencesUpdated` push | **Verified** — house preferences update live rather than on the 5-minute poll |
+| Fahrenheit temperatures | **Verified** on one US account; see open questions |
 
 ### Token rotation persistence
 
@@ -356,43 +391,34 @@ terminal 2 is unwired.
 
 ## Open questions
 
-1. **Reboot and recalibrate are uncaptured.** Both exist in the app; neither was
-   triggered. API.md carries a placeholder guessed by analogy with `performota`,
-   explicitly marked unverified. The `button` entities for these do not ship — a
-   wrong path merely 404s, but a wrong *body* against a live endpoint attached to
-   a motorised window might not be so benign. Recalibrate additionally drives the
-   sash through a full travel cycle, so it needs a confirmation step even once
-   the shape is known.
+1. **Temperature units are Fahrenheit — on the evidence of one account.**
+   There is no unit key anywhere in the API (`/defaults` returns `{"data": []}`),
+   the app's limits read as Fahrenheit, and forcing the Android device to Celsius
+   did not change the app's display. Marvin sells into the US and Canada only, so
+   the integration now declares Fahrenheit. If a metric account ever surfaces,
+   this becomes per-account rather than a constant — and changing it again would
+   reinterpret existing recorder history, so it is worth getting a second account
+   confirmed before assuming it is settled.
 
-2. **Temperature units.** `/defaults` was checked and contains **no** unit keys,
-   so where the °C/°F preference lives is still unknown. The integration assumes
-   Celsius. Guessing wrong silently corrupts recorder history, the same class of
-   bug as the sentinels.
-
-3. **Non-sash commands unverified** — shade, LED, lock, CLiC and tinting come
+2. **Non-sash commands unverified** — shade, LED, lock, CLiC and tinting come
    from app action constants only, with no hardware to test against. All
    capability-gated, so they simply produce no entity on hardware that lacks
    them.
 
-4. **Group commands only partly verified.** House-wide broadcast works: passing a
-   House id to `/commands` moves every asset, which is what the app's airflow
-   control does. Marvin's server-side *groups* (`groupStates`,
-   `HouseGroupStateUpdated`) are real but their command shape is unknown.
-
-5. **Environment sensors return sentinels on the reference account**, with
+3. **Environment sensors return sentinels on the reference account**, with
    `autoVentingEnabled: false`. The hypothesis is that the Air Algorithm
    populates them only when auto-venting is on; it may instead be that
    casement/awning units lack the IAQ hardware Awaken skylights carry. The
    entities exist and self-populate if data ever appears.
 
-6. **The `hA*Position` → terminal mapping is still undocumented.** The
+4. **The `hA*Position` → terminal mapping is still undocumented.** The
    integration does not depend on it — the fallback uses positions the user
    declares — but the config flow's pre-filled suggestions assume
    `hA2`→terminal 5, `hA3`→4, `hA4`→3. Anyone wiring this up should confirm
    against their own hardware by firing one relay channel and reading the
    position back.
 
-7. **The failover path has never run against real relays.** Its selection logic
+5. **The failover path has never run against real relays.** Its selection logic
    has unit tests, but no relay has been pulsed by this code. Worth exercising
    deliberately — block access to `azapi.marvin.com` for a minute — rather than
    discovering its behaviour during a real outage.
@@ -404,6 +430,36 @@ terminal 2 is unwired.
 - **Local control.** Not possible without firmware modification; see RESEARCH.md. The devices listen on no TCP ports.
 - **Replacing the dry contacts.** They remain the only internet-independent path and the integration treats them as a fallback, not a migration target.
 - **Device provisioning / onboarding.** BLE commissioning stays in the Marvin app.
+- **Marvin's server-side groups.** Group CRUD is captured and works, but groups
+  have **no command endpoint**: commanding one in the app emits a single
+  `POST /commands` with one entry per member, fanned out client-side. A group is
+  an organisational label, and Home Assistant already has areas, labels and
+  groups that do the job better. Mirroring Marvin's would add a sync problem
+  and buy nothing.
+- **Notification preferences.** `GET`/`PUT /notificationpreferences/{houseId}`
+  is captured and works — twelve toggles covering rain, obstruction, power loss,
+  product-offline and auto-open/close alerts. They control **push notifications
+  to the Marvin phone app**, and nothing else: Home Assistant never receives
+  those pushes, so mirroring the toggles would let you configure a channel HA
+  cannot observe. Home Assistant notifies off the rain, obstruction and fault
+  entities directly, with far better routing than Marvin's fixed categories.
+  Nothing is lost by leaving these in the app.
+- **Event history.** `POST /houses/{houseId}/events` returns Marvin's own feed —
+  `{title, message, eventTime, assetId, imageURL}`. Across a 54-event sample the
+  titles reduce to five: *Window locked*, *Window unlocked*, *Window opened*,
+  *Window closed*, *Window sensed rain*. Every one is already an entity here,
+  already updated sub-second over SignalR, and already recorded in the logbook
+  with more precision than a sentence of prose. The feed carries no event that
+  cannot be derived from existing state. (It does cover periods before the
+  integration was installed, but Home Assistant cannot backfill historical
+  states anyway, so that is not a usable advantage.)
+- **Schedules and automations.** The app's Hermes bundle carries `CREATE_SCHEDULE`,
+  `BUILD_SCHEDULE`, `DELETE_SCHEDULE` and `AUTO_SELECT_RAIN`, but a full sweep of
+  the app's UI produced **no schedule or automation endpoint at all** — what the
+  app labels "Automations" is the auto-venting preferences plus notification
+  toggles, both of which are covered. Those constants appear to be unused for
+  this hardware. Home Assistant's own automation engine is the better home for
+  this regardless.
 
 ## Release hygiene
 

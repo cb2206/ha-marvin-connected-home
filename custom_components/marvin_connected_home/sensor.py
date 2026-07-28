@@ -107,12 +107,27 @@ class MarvinHouseSensorDescription(SensorEntityDescription):
     value_fn: Callable[[Environment], float | str | None]
 
 
+# Temperatures are **Fahrenheit**, and this is not a guess to be tidied away:
+#
+# * the app's auto-venting limits come back as 54-77, a sensible venting band
+#   in Fahrenheit and nonsense in Celsius;
+# * there is no unit key anywhere in the API -- `/defaults`, which was the
+#   obvious candidate, returns literally `{"data": []}`;
+# * setting the Android device's own unit preference to Celsius did not change
+#   what the app displayed, so the app is not converting either;
+# * Marvin sells into the US and Canada only.
+#
+# Home Assistant converts to the user's display unit from here, so declaring
+# the native unit correctly is all that is required. If a non-US account ever
+# turns up reporting Celsius, this needs a per-account unit, not a constant.
+
+
 HOUSE_SENSORS: tuple[MarvinHouseSensorDescription, ...] = (
     MarvinHouseSensorDescription(
         key="indoor_temperature",
         translation_key="indoor_temperature",
         device_class=SensorDeviceClass.TEMPERATURE,
-        native_unit_of_measurement=UnitOfTemperature.CELSIUS,
+        native_unit_of_measurement=UnitOfTemperature.FAHRENHEIT,
         state_class=SensorStateClass.MEASUREMENT,
         value_fn=lambda e: e.indoor_temperature,
     ),
@@ -128,7 +143,7 @@ HOUSE_SENSORS: tuple[MarvinHouseSensorDescription, ...] = (
         key="indoor_dew_point",
         translation_key="indoor_dew_point",
         device_class=SensorDeviceClass.TEMPERATURE,
-        native_unit_of_measurement=UnitOfTemperature.CELSIUS,
+        native_unit_of_measurement=UnitOfTemperature.FAHRENHEIT,
         state_class=SensorStateClass.MEASUREMENT,
         value_fn=lambda e: e.indoor_dew_point,
     ),
@@ -157,10 +172,18 @@ HOUSE_SENSORS: tuple[MarvinHouseSensorDescription, ...] = (
         value_fn=lambda e: e.indoor_pm25,
     ),
     MarvinHouseSensorDescription(
+        key="indoor_air_quality",
+        translation_key="indoor_air_quality",
+        # Marvin's own index, not a standard AQI, so no device_class: claiming
+        # SensorDeviceClass.AQI would assert a scale we have not verified.
+        state_class=SensorStateClass.MEASUREMENT,
+        value_fn=lambda e: e.indoor_air_quality,
+    ),
+    MarvinHouseSensorDescription(
         key="outdoor_temperature",
         translation_key="outdoor_temperature",
         device_class=SensorDeviceClass.TEMPERATURE,
-        native_unit_of_measurement=UnitOfTemperature.CELSIUS,
+        native_unit_of_measurement=UnitOfTemperature.FAHRENHEIT,
         state_class=SensorStateClass.MEASUREMENT,
         value_fn=lambda e: e.outdoor_temperature,
     ),
@@ -176,9 +199,15 @@ HOUSE_SENSORS: tuple[MarvinHouseSensorDescription, ...] = (
         key="outdoor_dew_point",
         translation_key="outdoor_dew_point",
         device_class=SensorDeviceClass.TEMPERATURE,
-        native_unit_of_measurement=UnitOfTemperature.CELSIUS,
+        native_unit_of_measurement=UnitOfTemperature.FAHRENHEIT,
         state_class=SensorStateClass.MEASUREMENT,
         value_fn=lambda e: e.outdoor_dew_point,
+    ),
+    MarvinHouseSensorDescription(
+        key="outdoor_air_quality",
+        translation_key="outdoor_air_quality",
+        state_class=SensorStateClass.MEASUREMENT,
+        value_fn=lambda e: e.outdoor_air_quality,
     ),
     MarvinHouseSensorDescription(
         key="outdoor_conditions",
