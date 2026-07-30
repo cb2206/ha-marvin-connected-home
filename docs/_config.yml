@@ -1,8 +1,5 @@
 title: Marvin Connected Home for Home Assistant
-description: >-
-  Unofficial Home Assistant integration for Marvin Connected Home automated
-  windows, skylights and doors. Real 0-100% cover positioning and sub-second
-  state over SignalR.
+description: Unofficial custom integration for automated windows and skylights
 url: https://cb2206.github.io
 baseurl: /ha-marvin-connected-home
 theme: jekyll-theme-minimal
