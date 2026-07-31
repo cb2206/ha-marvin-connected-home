@@ -469,14 +469,15 @@ terminal 2 is unwired.
 - **Options flow** for the dry-contact mapping and notification toggle, so they're editable after setup.
 - **README must be explicit** about verified vs inferred hardware. Users with skylights or multi-slide doors should know they're the first to test that path.
 - Unofficial-API disclaimer: Marvin has re-platformed once already (Google Cloud IoT Core → Azure), so the API can change without notice.
-- **CI** runs on both repos: ruff + strict mypy + pytest on the library; pytest, hassfest and HACS validation here. The library release process is: tag `vX.Y.Z` on the library, then point `manifest.json`'s requirement at that tag and bump the integration version to match.
+- **CI** runs on both repos: ruff + strict mypy + pytest on the library; pytest, hassfest and HACS validation here. The library release process is: tag `vX.Y.Z` on the library, which triggers its `release.yml` workflow to build and publish that version to PyPI; then pin `manifest.json`'s requirement to `marvin-connected-home==X.Y.Z` and bump the integration version.
 
 ## Roadmap
 
-- **Publish the library to PyPI and pin by version** (deferred 2026-07). The
-  manifest currently installs the library from a **git tag**, and tags are
-  mutable — anyone who compromises the GitHub account can silently change what
-  every install pulls, and HACS/HA convention expects PyPI requirements anyway.
-  Until then, treat tags as immutable by policy: never force-move a released
-  `v*` tag. Pinning a commit hash instead of a tag is the cheap interim
-  hardening if publishing stalls.
+- ~~**Publish the library to PyPI and pin by version**~~ — done 2026-07-30.
+  The manifest previously installed the library from a **git tag**, and tags are
+  mutable: anyone who compromised the GitHub account could silently change what
+  every install pulled. `marvin-connected-home` is now on PyPI, published from
+  the library repo by GitHub Actions using [trusted publishing][tp] (OIDC, no
+  API token), and the requirement is a plain `==` version pin.
+
+[tp]: https://docs.pypi.org/trusted-publishers/
