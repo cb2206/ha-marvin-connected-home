@@ -8,3 +8,5 @@ marvin-api-request-email.md
 # capture output — raw flows hold live tokens; the redacted JSONL is
 # best-effort, so promote lines into API.md deliberately rather than by default
 captures/
+# local capture of this installation's fallback wiring
+.marvin-fallback-backup.md
