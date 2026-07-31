@@ -11,9 +11,8 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import EntityCategory
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import HomeAssistantError
-from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
-from homeassistant.helpers.update_coordinator import CoordinatorEntity
+
 from marvin_connected_home import Device, MarvinError
 
 from .const import DOMAIN
@@ -142,7 +141,7 @@ class MarvinConfigSwitch(MarvinAssetEntity, SwitchEntity):
         await self.coordinator.async_request_refresh()
 
 
-class MarvinAutoVentingSwitch(CoordinatorEntity[MarvinCoordinator], SwitchEntity):
+class MarvinAutoVentingSwitch(MarvinHouseEntity, SwitchEntity):
     """House-level auto venting.
 
     This lets Marvin's Air Algorithm open and close windows on its own, so it is
@@ -150,25 +149,14 @@ class MarvinAutoVentingSwitch(CoordinatorEntity[MarvinCoordinator], SwitchEntity
     real-world effects the user should see in the main entity list.
     """
 
-    _attr_has_entity_name = True
     _attr_translation_key = "auto_venting"
 
     def __init__(self, coordinator: MarvinCoordinator) -> None:
-        super().__init__(coordinator)
-        self._attr_unique_id = f"{coordinator.house_id}_auto_venting"
-
-    @property
-    def device_info(self) -> DeviceInfo:
-        house = self.coordinator.data
-        return DeviceInfo(
-            identifiers={(DOMAIN, self.coordinator.house_id)},
-            manufacturer="Marvin",
-            name=house.name if house else "Marvin Connected Home",
-        )
+        super().__init__(coordinator, "auto_venting")
 
     @property
     def is_on(self) -> bool | None:
-        house = self.coordinator.data
+        house = self.house
         return None if house is None else house.auto_venting_enabled
 
     async def async_turn_on(self, **kwargs: Any) -> None:

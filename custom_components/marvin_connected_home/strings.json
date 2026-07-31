@@ -3,7 +3,7 @@
     "step": {
       "user": {
         "title": "Sign in to Marvin",
-        "description": "Marvin's app uses a mobile-only redirect (`aurora://login/verify`), so Home Assistant cannot complete the sign-in for you.\n\n1. **[Open the Marvin sign-in page]({authorize_url})** in Chrome and sign in.\n\n2. Your browser will fail to open a page starting `aurora://`. That is expected \u2014 copy the whole URL from the address bar.\n\n3. Paste it below.\n\nIf your browser discards the address (Safari does), open DevTools, enable **Preserve log** on the Network tab, and copy the `Location` header from the final redirect.",
+        "description": "Sign in to Marvin, then paste the address you land on.\n\n1. **[Open the Marvin sign-in page]({authorize_url})** and sign in.\n\n2. You will land on a Microsoft page titled **jwt.ms**. It may say it found no token — that is expected and does not mean anything went wrong.\n\n3. Copy the whole address from your browser's address bar and paste it below. It contains `#code=...`.",
         "data": {
           "redirect_url": "Redirect URL"
         }
@@ -16,15 +16,15 @@
       },
       "reauth_confirm": {
         "title": "Sign in to Marvin again",
-        "description": "The saved session can no longer be renewed.\n\n**[Sign in to Marvin again]({authorize_url})**, then paste the redirect URL below.",
+        "description": "The saved session can no longer be renewed.\n\n**[Sign in to Marvin again]({authorize_url})**, then copy the whole address of the **jwt.ms** page you land on and paste it below.",
         "data": {
           "redirect_url": "Redirect URL"
         }
       }
     },
     "error": {
-      "no_code": "No authorization code found in that URL. Make sure you copied the full address, including everything after `?`.",
-      "invalid_code": "That code was rejected. Codes are single-use and expire quickly \u2014 start again from the sign-in link above.",
+      "no_code": "No authorization code found in that address. Copy the whole thing from the address bar, including everything after `#`.",
+      "invalid_code": "That code was rejected. Codes are single-use and expire quickly — start again from the sign-in link above.",
       "state_mismatch": "That URL came from a different sign-in attempt. Start again from the sign-in link above and paste the URL it produces.",
       "no_refresh_token": "Sign-in succeeded but no refresh token was issued, so Home Assistant could not stay signed in.",
       "cannot_connect": "Could not reach Marvin's servers."
@@ -212,14 +212,14 @@
     "step": {
       "init": {
         "title": "Dry-contact fallback",
-        "description": "Marvin's windows have momentary dry contacts that work with no network at all. If you have wired them to switch entities, Home Assistant can use them when the Marvin cloud is unreachable.\n\nThis is entirely optional \u2014 leave it empty and nothing will ever pulse a relay.\n\nChoose a window to configure.",
+        "description": "Marvin's windows have momentary dry contacts that work with no network at all. If you have wired them to switch entities, Home Assistant can use them when the Marvin cloud is unreachable.\n\nThis is entirely optional — leave it empty and nothing will ever pulse a relay.\n\nChoose a window to configure.",
         "data": {
           "asset": "Window"
         }
       },
       "window": {
         "title": "Dry contacts for {window}",
-        "description": "Pick the switch entity wired to each contact, and the position that contact drives the sash to.\n\nThe percentages are pre-filled from the window's own configuration, but the mapping between those settings and the physical terminals is undocumented \u2014 **check them against your wiring**. Fire one relay channel and see where the sash ends up.\n\nLeave a row blank if that contact is not wired. A 4-wire run typically has close plus three open positions and no stop.",
+        "description": "Pick the switch entity wired to each contact, and the position that contact drives the sash to.\n\nThe percentages are pre-filled from the window's own configuration, but the mapping between those settings and the physical terminals is undocumented — **check them against your wiring**. Fire one relay channel and see where the sash ends up.\n\nLeave a row blank if that contact is not wired. A 4-wire run typically has close plus three open positions and no stop.",
         "data": {
           "close_switch": "Close and lock (terminal 6)",
           "position_1_switch": "Open position 1 switch (terminal 5)",
@@ -240,7 +240,8 @@
       }
     },
     "abort": {
-      "no_sashes": "No windows with a movable sash were found."
+      "no_sashes": "No windows with a movable sash were found.",
+      "entry_not_loaded": "The integration is not currently loaded. Fix its setup (or finish signing in again) and retry."
     }
   }
 }

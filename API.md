@@ -16,7 +16,7 @@ Azure AD B2C.
 | Public client id | `0d117826-a605-4d81-999e-ae67e85de895` |
 | Policy | `B2C_1A_AuroraSignInRegister` |
 | Other policies | `B2C_1A_AuroraPasswordReset`, `B2C_1A_AuroraProfileEdit` |
-| Redirect URI | `aurora://login/verify` |
+| Redirect URI | `aurora://login/verify` (the app's), `https://jwt.ms` (also registered) |
 | Scopes | `openid offline_access` |
 | Flow | authorization code + PKCE |
 | Token TTL | 3600 s |
@@ -24,7 +24,13 @@ Azure AD B2C.
 
 **Header quirk:** the app sends `authorization: Bearer Bearer <jwt>` — a doubled scheme, evidently a bug on Marvin's side. **The correct single `Bearer` also works** (verified), so there is no need to replicate it.
 
-**The redirect is a custom URI scheme**, so no web server can receive it, and new redirect URIs cannot be registered against Marvin's tenant. Headless and desktop clients must collect the authorization code by hand — Chrome keeps the failed `aurora://` URL in the address bar; Safari discards it, in which case read the `Location` header of the final 302 with DevTools *Preserve log* enabled.
+**The app's redirect is a custom URI scheme**, so no web server can receive it, and new redirect URIs cannot be registered against Marvin's tenant.
+
+**But `https://jwt.ms` is also registered** for this client id, and it is a far better target for any non-mobile consumer: a real page every browser loads, so the code is simply in the address bar. B2C validates `redirect_uri` before rendering the sign-in page — answering `AADB2C90006` for an unregistered value — so the registration is enumerable without credentials. Confirmed *rejected*: every `http://localhost` / `127.0.0.1` spelling, `https://<tenant>.b2clogin.com/oauth2/nativeclient`, `msal<client_id>://auth`, `urn:ietf:wg:oauth:2.0:oob`, and `https://my.home-assistant.io/redirect/oauth`. So a loopback listener is not possible; a paste is.
+
+Prefer `response_mode=fragment`: fragments are never sent to the redirect target's server, so the code stays in the browser instead of reaching Microsoft. The policy supports `query`, `fragment` and `form_post`.
+
+**No device authorization grant.** The policy's OIDC discovery document advertises no `device_authorization_endpoint`; Azure AD B2C does not implement RFC 8628. The verification-URL-plus-user-code flow in Marvin's Control4 driver is therefore Chowmain's own relay, not a Marvin endpoint.
 
 **The bearer is the `id_token`, not an access token.** With `scope=openid offline_access` and no resource scope, B2C returns only `id_token` and `refresh_token`; the app sends the id_token, which is why a working bearer carries `aud=<client_id>` and an `emailAddress` claim.
 

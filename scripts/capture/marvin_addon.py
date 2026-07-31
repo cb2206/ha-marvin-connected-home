@@ -37,8 +37,14 @@ WRITE_METHODS = {"POST", "PUT", "PATCH", "DELETE"}
 
 SECRET_HEADERS = {"authorization", "cookie", "set-cookie", "x-api-key", "ocp-apim-subscription-key"}
 SECRET_KEYS = re.compile(
-    r"token|password|secret|client_secret|code_verifier|assertion|signature", re.IGNORECASE
+    r"token|password|secret|client_secret|code_verifier|assertion|signature|\bcode\b",
+    re.IGNORECASE,
 )
+
+# Query keys whose *names* are too generic for SECRET_KEYS but whose values are
+# credentials on the wire: SignalR's websocket connect carries the connection
+# token as `id=` and its bearer as `access_token=` in the query string.
+SECRET_QUERY_KEYS = {"id", "code", "state"}
 
 MAX_BODY = 20_000
 
@@ -70,7 +76,7 @@ class MarvinCapture:
                 "time": flow.request.timestamp_start,
                 "method": flow.request.method,
                 "host": host,
-                "path": flow.request.path,
+                "path": _redact_path(flow.request.path),
                 "request_headers": _redact_headers(flow.request.headers),
                 "request_body": _redact_body(flow.request.get_text(strict=False)),
                 "status": flow.response.status_code,
@@ -84,7 +90,7 @@ class MarvinCapture:
         marker = " <<<" if interesting else ""
         body = _redact_body(flow.request.get_text(strict=False)) or ""
         ctx.log.info(
-            f"[marvin] {flow.request.method} {flow.request.path} "
+            f"[marvin] {flow.request.method} {_redact_path(flow.request.path)} "
             f"-> {flow.response.status_code} {body[:300]}{marker}"
         )
 
@@ -109,7 +115,7 @@ class MarvinCapture:
                 "kind": "websocket",
                 "time": message.timestamp,
                 "host": flow.request.pretty_host,
-                "path": flow.request.path,
+                "path": _redact_path(flow.request.path),
                 "direction": "client->server" if message.from_client else "server->client",
                 "message": _redact_body(text.replace("\x1e", "")),
             }
@@ -120,6 +126,27 @@ class MarvinCapture:
         if self.path is not None:
             with self.path.open("a") as fh:
                 fh.write(json.dumps(record) + "\n")
+
+
+def _redact_path(path: str) -> str:
+    """Redact credential-bearing query parameters, keeping the route visible.
+
+    mitmproxy's ``path`` includes the query string, and SignalR is exactly the
+    protocol that puts credentials there -- the websocket connect looks like
+    ``?id=<connectionToken>&access_token=<jwt>``. Header and body redaction
+    alone would still leak a live session through every socket record.
+    """
+    if "?" not in path:
+        return path
+    base, query = path.split("?", 1)
+    redacted = [
+        f"{key}=<redacted>"
+        if SECRET_KEYS.search(key) or key.lower() in SECRET_QUERY_KEYS
+        else pair
+        for pair in query.split("&")
+        for key in (pair.split("=", 1)[0],)
+    ]
+    return f"{base}?{'&'.join(redacted)}"
 
 
 def _redact_headers(headers: Any) -> dict[str, str]:

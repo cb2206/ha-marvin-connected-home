@@ -27,6 +27,7 @@ from homeassistant.const import EntityCategory
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
+
 from marvin_connected_home import MarvinClient, MarvinError
 
 from .const import DOMAIN

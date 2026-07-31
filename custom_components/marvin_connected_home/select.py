@@ -15,12 +15,15 @@ reports and switches the mode correctly.
 
 from __future__ import annotations
 
+from typing import ClassVar
+
 from homeassistant.components.select import SelectEntity
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import EntityCategory
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
+
 from marvin_connected_home import MarvinError
 
 from .const import DOMAIN
@@ -46,7 +49,7 @@ async def async_setup_entry(
 class MarvinMoistureMetricSelect(MarvinHouseEntity, SelectEntity):
     _attr_translation_key = "moisture_metric"
     _attr_entity_category = EntityCategory.CONFIG
-    _attr_options = list(OPTIONS.values())
+    _attr_options: ClassVar[list[str]] = list(OPTIONS.values())
 
     def __init__(self, coordinator: MarvinCoordinator) -> None:
         super().__init__(coordinator, "moisture_metric")

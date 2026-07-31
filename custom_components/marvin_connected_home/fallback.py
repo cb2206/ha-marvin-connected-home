@@ -25,21 +25,26 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any
 
-from homeassistant.const import ATTR_ENTITY_ID, STATE_ON, STATE_UNAVAILABLE, STATE_UNKNOWN
+from homeassistant.const import (
+    ATTR_ENTITY_ID,
+    STATE_ON,
+    STATE_UNAVAILABLE,
+    STATE_UNKNOWN,
+)
 from homeassistant.core import HomeAssistant
 
 from .const import (
     CONF_CLOSE_SWITCH,
     CONF_CONTACT_SENSOR,
     CONF_NOTIFY_ON_SWITCHOVER,
+    CONF_POSITION,
     CONF_POSITION_SWITCHES,
     CONF_PULSE_DURATION,
     CONF_STOP_SWITCH,
     CONF_SWITCH_ENTITY,
-    CONF_POSITION,
     DEFAULT_NOTIFY_ON_SWITCHOVER,
     DEFAULT_PULSE_DURATION,
 )
@@ -140,6 +145,11 @@ class FallbackConfig:
         return tuple(sorted(set(positions)))
 
 
+#: Settle time after releasing a contact found already held closed, so the
+#: relay has visibly opened before the pulse that needs its rising edge.
+RELEASE_SETTLE_SECONDS = 0.1
+
+
 async def async_pulse(hass: HomeAssistant, entity_id: str, duration: float) -> None:
     """Momentarily close a contact by toggling *entity_id*.
 
@@ -147,16 +157,44 @@ async def async_pulse(hass: HomeAssistant, entity_id: str, duration: float) -> N
     momentary mode), so only the on command is sent. Otherwise the switch is
     turned back off, because leaving a Marvin contact held closed is not what the
     hardware expects -- its wiring instructions call for momentary switches.
+
+    Two guarantees the hardware's edge-triggering makes essential:
+
+    * A switch found already on is released first. Turning on an already-on
+      switch produces no edge, so without this a contact left latched (by a
+      crash, a reload mid-pulse, or the user) makes every later pulse a silent
+      no-op that still gets reported as a success.
+    * The turn-off runs even if the pulse is cancelled mid-sleep (shutdown,
+      reload) or the sleep raises -- otherwise the contact stays held closed,
+      which both violates the momentary wiring spec and latches the switch
+      into the no-edge state above.
     """
-    await hass.services.async_call(
-        "switch", "turn_on", {ATTR_ENTITY_ID: entity_id}, blocking=True
-    )
+    state = hass.states.get(entity_id)
+    if state is not None and state.state == STATE_ON:
+        await hass.services.async_call(
+            "switch", "turn_off", {ATTR_ENTITY_ID: entity_id}, blocking=True
+        )
+        await asyncio.sleep(RELEASE_SETTLE_SECONDS)
+
     if duration <= 0:
+        await hass.services.async_call(
+            "switch", "turn_on", {ATTR_ENTITY_ID: entity_id}, blocking=True
+        )
         return
-    await asyncio.sleep(duration)
-    await hass.services.async_call(
-        "switch", "turn_off", {ATTR_ENTITY_ID: entity_id}, blocking=True
-    )
+
+    try:
+        await hass.services.async_call(
+            "switch", "turn_on", {ATTR_ENTITY_ID: entity_id}, blocking=True
+        )
+        await asyncio.sleep(duration)
+    finally:
+        # Shielded so a cancellation delivered during the sleep cannot also
+        # kill the release.
+        await asyncio.shield(
+            hass.services.async_call(
+                "switch", "turn_off", {ATTR_ENTITY_ID: entity_id}, blocking=True
+            )
+        )
 
 
 def read_contact_sensor(hass: HomeAssistant, entity_id: str | None) -> bool | None:

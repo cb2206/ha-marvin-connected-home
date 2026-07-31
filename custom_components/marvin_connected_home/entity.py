@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from homeassistant.helpers.device_registry import CONNECTION_NETWORK_MAC, DeviceInfo
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
+
 from marvin_connected_home import Asset, Device, House
 
 from .const import DOMAIN

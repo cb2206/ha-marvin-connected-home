@@ -33,6 +33,14 @@ PATH_CLOUD: Final = "cloud"
 PATH_DRY_CONTACT: Final = "dry_contact"
 PATH_UNAVAILABLE: Final = "unavailable"
 
+# Why the cloud path is out, exposed as the `degraded_reason` attribute on the
+# control-path sensor. The relays behave identically in all three cases; the
+# *remedy* differs, which is exactly what an automation or a notification
+# needs to branch on.
+REASON_REAUTH: Final = "reauthentication_required"
+REASON_CLOUD: Final = "cloud_unreachable"
+REASON_DEVICE: Final = "device_offline"
+
 # --- polling ------------------------------------------------------------
 
 SCAN_INTERVAL_SECONDS: Final = 300

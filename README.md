@@ -27,15 +27,23 @@ Then **Settings → Devices & services → Add integration → Marvin Connected 
 
 ## Signing in
 
-Marvin's app registers `aurora://login/verify` — a mobile-only URI scheme — and new redirect URIs cannot be registered against their tenant. Home Assistant therefore cannot complete the redirect itself, so the config flow asks you to paste back the URL you land on:
+New redirect URIs cannot be registered against Marvin's tenant, so Home Assistant cannot receive the sign-in redirect itself. It asks you to paste back the address you land on:
 
-1. Click the sign-in link in the config flow and sign in **in Chrome**.
-2. The browser fails to open a page starting `aurora://`. That is expected — copy the whole URL from the address bar.
-3. Paste it into the form.
+1. Click the sign-in link in the config flow and sign in, in any browser.
+2. You land on a Microsoft page titled **jwt.ms**. It may say it found no token — that is expected.
+3. Copy the whole address from the address bar and paste it into the form.
 
-If your browser discards the address (Safari does), open DevTools, enable **Preserve log** on the Network tab, and copy the `Location` header from the final 302.
+That is the entire flow. No DevTools, and any browser works.
 
-The pasted code is protected by PKCE, so it is useless to anyone who intercepts it. Sessions renew automatically; you should not have to repeat this.
+The pasted code is protected by PKCE, so it is useless to anyone who intercepts it — and because the flow asks for `response_mode=fragment`, the code stays in your browser rather than being sent to Microsoft's server at all. Sessions renew automatically; you should not have to repeat this.
+
+<details>
+<summary>Why a paste is still needed</summary>
+
+Marvin's app registers `aurora://login/verify`, a mobile-only URI scheme that no browser can open and Safari discards outright — which is what used to make this painful. Azure AD B2C validates `redirect_uri` before it renders a sign-in page, answering `AADB2C90006` for anything unregistered, so the client's registration can be enumerated without signing in. Doing that found `https://jwt.ms` is also registered — Microsoft's own token-inspection page, almost certainly left over from the Azure portal's "Run user flow" default. It is a real page in every browser, which is why the DevTools step is gone.
+
+What is *not* registered, and so is not available: every `http://localhost` and `127.0.0.1` spelling (a loopback listener would remove the copy/paste entirely), the MSAL conventions, and `https://my.home-assistant.io`. Azure AD B2C also does not implement the OAuth device authorization grant — the policy's discovery document advertises no `device_authorization_endpoint` — so the "verification URL plus user code" screen in Marvin's Control4 driver is Chowmain's own relay service, not something this integration can reuse.
+</details>
 
 ## Entities
 
@@ -111,9 +119,9 @@ Contacts are **momentary and edge-triggered** — no minimum duration. If your r
 - Requested positions **snap to the nearest configured stop that moves in the requested direction**, and the cover reports the stop it reached — not the number you asked for. An open request never fires the close relay: with only a close contact wired, "open" refuses rather than shutting the window on you.
 - `OPEN`, `SET_POSITION` and `STOP` disappear from the cover's supported features unless your wiring actually supports them — opening needs at least one open-position contact, stopping needs terminal 2.
 - **Position and open/closed report `unknown`** unless you configured your own sash contact sensor. A cover claiming 60% while shut is worse than one admitting it does not know.
-- The `Control path` sensor reflects reality, so automations can branch on it. An optional notification fires on switchover.
+- The `Control path` sensor reflects reality, so automations can branch on it. Its `degraded_reason` attribute says *why* the cloud path is out — `reauthentication_required`, `cloud_unreachable` or `device_offline` — since the relays behave identically in all three cases but the remedy differs. An optional notification fires on switchover.
 
-A cloud command that fails on *connectivity* falls back. One that fails on auth or per-command rejection does not — the contacts would mask a real fault rather than fix it.
+A cloud command that fails mid-flight on *connectivity* falls back. One that fails on a per-command auth error or rejection does not — the contacts would mask a real fault rather than fix it. If the saved *session* dies (refresh token expired or revoked), the windows stay controllable through the contacts — automations keep working — while Home Assistant asks you to sign in again, and the switchover notification says the session expired rather than blaming the network.
 
 ## Hardware support
 

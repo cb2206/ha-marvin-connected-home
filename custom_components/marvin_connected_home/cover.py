@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
+import re
 from typing import Any
 
 from homeassistant.components.cover import (
@@ -15,16 +17,21 @@ from homeassistant.components.persistent_notification import async_create as not
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import HomeAssistantError
-from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
+
 from marvin_connected_home import MarvinConnectionError, MarvinError
 
 from .const import DOMAIN, PATH_CLOUD, PATH_DRY_CONTACT, PATH_UNAVAILABLE
 from .coordinator import MarvinCoordinator
-from .entity import MarvinAssetEntity
+from .entity import MarvinAssetEntity, MarvinHouseEntity
 from .fallback import FallbackConfig, async_pulse, read_contact_sensor
 
 _LOGGER = logging.getLogger(__name__)
+
+
+def _escape_markdown(text: str) -> str:
+    """Backslash-escape markdown so server-supplied text renders literally."""
+    return re.sub(r"([\\*_`\[\]()#>~|])", r"\\\1", text)
 
 
 async def async_setup_entry(
@@ -63,6 +70,11 @@ class MarvinSashCover(MarvinAssetEntity, CoverEntity):
         super().__init__(coordinator, asset_id, "sash")
         self._notified_degraded = False
         self._last_contact_position: int | None = None
+        # Serialises relay pulses. Without it, two commands in quick succession
+        # (an automation plus a dashboard press) interleave their on/sleep/off
+        # sequences across different relays -- behaviour the hardware's wiring
+        # spec does not define.
+        self._pulse_lock = asyncio.Lock()
 
     # -- control path ---------------------------------------------------
 
@@ -173,7 +185,13 @@ class MarvinSashCover(MarvinAssetEntity, CoverEntity):
         if self._degraded:
             fallback = self._fallback
             attributes["available_positions"] = list(fallback.available_positions)
-            attributes["position_is_inferred"] = self.current_cover_position is not None
+            # Inferred means "the last stop we drove to", not a measurement. A
+            # 0 backed by the contact sensor reading closed is measured, so it
+            # is not flagged.
+            closed = read_contact_sensor(self.hass, fallback.contact_sensor)
+            attributes["position_is_inferred"] = (
+                closed is False and self._last_contact_position is not None
+            )
         return attributes
 
     # -- commands -------------------------------------------------------
@@ -201,7 +219,10 @@ class MarvinSashCover(MarvinAssetEntity, CoverEntity):
                     "Cannot stop while the Marvin cloud is unreachable: no stop "
                     "contact is configured for this window"
                 )
-            await async_pulse(self.hass, fallback.stop_switch, fallback.pulse_duration)
+            async with self._pulse_lock:
+                await async_pulse(
+                    self.hass, fallback.stop_switch, fallback.pulse_duration
+                )
             return
 
         device = self.device
@@ -228,6 +249,11 @@ class MarvinSashCover(MarvinAssetEntity, CoverEntity):
                 raise HomeAssistantError(f"Failed to move {self.name or 'window'}: {err}") from err
             else:
                 self._notified_degraded = False
+                # The cloud moved the window, so any position remembered from a
+                # past contact pulse no longer describes reality. Clearing it
+                # keeps a *later* outage from reporting a stop driven before
+                # this command as if the sash were still there.
+                self._last_contact_position = None
                 return
 
         if not allow_fallback:
@@ -248,7 +274,8 @@ class MarvinSashCover(MarvinAssetEntity, CoverEntity):
                 "configured for this window"
             )
 
-        await async_pulse(self.hass, stop.entity_id, fallback.pulse_duration)
+        async with self._pulse_lock:
+            await async_pulse(self.hass, stop.entity_id, fallback.pulse_duration)
         self._last_contact_position = stop.position
         self.async_write_ha_state()
 
@@ -263,11 +290,27 @@ class MarvinSashCover(MarvinAssetEntity, CoverEntity):
 
         if fallback.notify_on_switchover and not self._notified_degraded:
             self._notified_degraded = True
+            # The window name comes from the cloud; escape it so a name
+            # containing markdown cannot restyle the notification.
+            name = _escape_markdown(self.name or self.entity_id)
+            # Blaming the network for a dead session would send the user off
+            # to check their router when the fix is signing in again.
+            if self.coordinator.auth_failed:
+                cause = (
+                    f"Your Marvin session has expired, so **{name}** was moved "
+                    "using its dry contacts. Sign in again under Settings > "
+                    "Devices & services > Marvin Connected Home to restore "
+                    "cloud control."
+                )
+            else:
+                cause = (
+                    f"The Marvin cloud is unreachable, so **{name}** was moved "
+                    "using its dry contacts."
+                )
             notify(
                 self.hass,
                 (
-                    f"The Marvin cloud is unreachable, so **{self.name or self.entity_id}** "
-                    f"was moved using its dry contacts. Only the positions "
+                    f"{cause} Only the positions "
                     f"{list(fallback.available_positions)} are available while "
                     "degraded, and position feedback is limited."
                 ),
@@ -276,7 +319,7 @@ class MarvinSashCover(MarvinAssetEntity, CoverEntity):
             )
 
 
-class MarvinHouseCover(MarvinAssetEntity, CoverEntity):
+class MarvinHouseCover(MarvinHouseEntity, CoverEntity):
     """Every sash in the house, as one entity.
 
     The API accepts a house id in place of an asset id and broadcasts, which is
@@ -297,20 +340,7 @@ class MarvinHouseCover(MarvinAssetEntity, CoverEntity):
     _attr_entity_registry_enabled_default = False
 
     def __init__(self, coordinator: MarvinCoordinator) -> None:
-        super().__init__(coordinator, coordinator.house_id, "all_windows")
-
-    @property
-    def available(self) -> bool:
-        return self.coordinator.last_update_success
-
-    @property
-    def device_info(self) -> DeviceInfo:
-        house = self.coordinator.data
-        return DeviceInfo(
-            identifiers={(DOMAIN, self.coordinator.house_id)},
-            manufacturer="Marvin",
-            name=house.name if house else "Marvin Connected Home",
-        )
+        super().__init__(coordinator, "all_windows")
 
     @property
     def is_closed(self) -> bool | None:

@@ -13,14 +13,13 @@ from homeassistant.components.binary_sensor import (
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import EntityCategory
 from homeassistant.core import HomeAssistant
-from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
-from homeassistant.helpers.update_coordinator import CoordinatorEntity
+
 from marvin_connected_home import Asset, Capabilities, Device
 
 from .const import DOMAIN
 from .coordinator import MarvinCoordinator
-from .entity import MarvinAssetEntity
+from .entity import MarvinAssetEntity, MarvinHouseEntity
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -155,7 +154,7 @@ class MarvinAssetBinarySensor(MarvinAssetEntity, BinarySensorEntity):
         return None if asset is None else self.entity_description.value_fn(asset)
 
 
-class MarvinOpenConditionSensor(CoordinatorEntity[MarvinCoordinator], BinarySensorEntity):
+class MarvinOpenConditionSensor(MarvinHouseEntity, BinarySensorEntity):
     """Whether the Air Algorithm's conditions for opening are currently met.
 
     Diagnostic, and only meaningful while auto venting is on: it reports what
@@ -163,24 +162,13 @@ class MarvinOpenConditionSensor(CoordinatorEntity[MarvinCoordinator], BinarySens
     when trying to work out why a window did or did not open on its own.
     """
 
-    _attr_has_entity_name = True
     _attr_translation_key = "open_condition_met"
     _attr_entity_category = EntityCategory.DIAGNOSTIC
 
     def __init__(self, coordinator: MarvinCoordinator) -> None:
-        super().__init__(coordinator)
-        self._attr_unique_id = f"{coordinator.house_id}_open_condition_met"
-
-    @property
-    def device_info(self) -> DeviceInfo:
-        house = self.coordinator.data
-        return DeviceInfo(
-            identifiers={(DOMAIN, self.coordinator.house_id)},
-            manufacturer="Marvin",
-            name=house.name if house else "Marvin Connected Home",
-        )
+        super().__init__(coordinator, "open_condition_met")
 
     @property
     def is_on(self) -> bool | None:
-        house = self.coordinator.data
+        house = self.house
         return None if house is None else house.open_condition_met

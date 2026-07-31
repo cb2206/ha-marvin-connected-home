@@ -9,13 +9,16 @@ without any hardware or a simulated cloud outage.
 
 from __future__ import annotations
 
+import asyncio
 import importlib
+from types import SimpleNamespace
 
 import pytest
 
 _fallback = importlib.import_module("marvin_connected_home.fallback")
 ContactStop = _fallback.ContactStop
 FallbackConfig = _fallback.FallbackConfig
+async_pulse = _fallback.async_pulse
 
 CLOSE = "switch.window_closed"
 P1 = "switch.window_open_1"
@@ -151,3 +154,65 @@ class TestResolve:
 
     def test_full_install_can_open(self) -> None:
         assert build().can_open is True
+
+
+class _PulseHass:
+    """Records switch calls and vends a controllable switch state."""
+
+    def __init__(self, state: str | None = None) -> None:
+        self.calls: list[str] = []
+        self._state = state
+        self.services = SimpleNamespace(async_call=self._async_call)
+        self.states = SimpleNamespace(
+            get=lambda entity_id: (
+                None if self._state is None else SimpleNamespace(state=self._state)
+            )
+        )
+
+    async def _async_call(self, domain, service, data, blocking=False):
+        self.calls.append(service)
+
+
+class TestPulse:
+    """The contacts are edge-triggered, which makes two properties essential:
+    a pulse must always release, and a latched switch must be released before
+    pulsing or the turn-on produces no edge and the window silently stays put.
+    """
+
+    def test_pulse_turns_on_then_off(self) -> None:
+        hass = _PulseHass(state="off")
+        asyncio.run(async_pulse(hass, "switch.x", 0.01))
+        assert hass.calls == ["turn_on", "turn_off"]
+
+    def test_zero_duration_only_turns_on(self) -> None:
+        """A self-pulsing relay must not receive an off it does not expect."""
+        hass = _PulseHass(state="off")
+        asyncio.run(async_pulse(hass, "switch.x", 0))
+        assert hass.calls == ["turn_on"]
+
+    def test_latched_switch_is_released_first(self) -> None:
+        """Turning on an already-on switch produces no edge, so a contact left
+        latched would make every later pulse a silent no-op."""
+        hass = _PulseHass(state="on")
+        asyncio.run(async_pulse(hass, "switch.x", 0.01))
+        assert hass.calls == ["turn_off", "turn_on", "turn_off"]
+
+    def test_unknown_state_does_not_pre_release(self) -> None:
+        hass = _PulseHass(state=None)
+        asyncio.run(async_pulse(hass, "switch.x", 0.01))
+        assert hass.calls == ["turn_on", "turn_off"]
+
+    def test_cancellation_mid_pulse_still_releases(self) -> None:
+        """A reload or shutdown arriving during the pulse must not leave the
+        contact held closed."""
+        hass = _PulseHass(state="off")
+
+        async def scenario() -> None:
+            task = asyncio.ensure_future(async_pulse(hass, "switch.x", 0.5))
+            await asyncio.sleep(0.05)  # let the turn_on land, cancel mid-sleep
+            task.cancel()
+            with pytest.raises(asyncio.CancelledError):
+                await task
+
+        asyncio.run(scenario())
+        assert hass.calls == ["turn_on", "turn_off"]

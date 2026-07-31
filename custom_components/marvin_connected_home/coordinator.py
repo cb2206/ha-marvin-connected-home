@@ -9,12 +9,14 @@ quietly, not the main path.
 from __future__ import annotations
 
 import logging
+from collections.abc import Callable
 from datetime import timedelta
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.exceptions import ConfigEntryAuthFailed
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
+
 from marvin_connected_home import (
     Asset,
     House,
@@ -25,7 +27,14 @@ from marvin_connected_home import (
     merge_assets,
 )
 
-from .const import CONF_FALLBACK, DOMAIN, SCAN_INTERVAL_SECONDS
+from .const import (
+    CONF_FALLBACK,
+    DOMAIN,
+    REASON_CLOUD,
+    REASON_DEVICE,
+    REASON_REAUTH,
+    SCAN_INTERVAL_SECONDS,
+)
 from .fallback import FallbackConfig
 
 _LOGGER = logging.getLogger(__name__)
@@ -53,7 +62,12 @@ class MarvinCoordinator(DataUpdateCoordinator[House]):
         self.house_id = house_id
         self.entry = entry
         self._realtime = realtime
-        self._unsubscribe: list[callable] = []
+        self._unsubscribe: list[Callable[[], None]] = []
+        #: True when the last poll failed on *authentication* rather than
+        #: connectivity. The dry contacts work identically either way, but the
+        #: remedy differs -- signing in again versus waiting out an outage --
+        #: so everything that reports degradation reads this to say which.
+        self.auth_failed = False
 
     # -- control path ---------------------------------------------------
 
@@ -84,13 +98,25 @@ class MarvinCoordinator(DataUpdateCoordinator[House]):
         device = asset.primary if asset else None
         return device is not None and device.online is not False
 
+    def degraded_reason(self, asset_id: str) -> str | None:
+        """Why the cloud path is out for *asset_id*, or None while it is up."""
+        if self.device_reachable(asset_id):
+            return None
+        if not self.cloud_available:
+            return REASON_REAUTH if self.auth_failed else REASON_CLOUD
+        return REASON_DEVICE
+
     async def _async_update_data(self) -> House:
         try:
-            return await self.client.async_get_house(self.house_id)
+            house = await self.client.async_get_house(self.house_id)
         except MarvinAuthError as err:
+            self.auth_failed = True
             raise ConfigEntryAuthFailed(str(err)) from err
         except MarvinError as err:
+            self.auth_failed = False
             raise UpdateFailed(str(err)) from err
+        self.auth_failed = False
+        return house
 
     async def async_start_realtime(self) -> None:
         self._unsubscribe.append(self._realtime.on_asset_update(self._handle_asset_update))
@@ -122,7 +148,16 @@ class MarvinCoordinator(DataUpdateCoordinator[House]):
                 self.data.assets[index] = merge_assets(existing, asset)
                 break
         else:
-            self.data.assets.append(asset)
+            # An asset the polled house has never confirmed. Entities are only
+            # created at setup, so appending it would grow state nothing reads;
+            # a genuinely new window appears on the next poll and gets entities
+            # on the next reload.
+            _LOGGER.debug(
+                "Ignoring push for unknown asset %s; not in house %s",
+                asset.asset_id,
+                self.house_id,
+            )
+            return
         self.async_set_updated_data(self.data)
 
     @callback

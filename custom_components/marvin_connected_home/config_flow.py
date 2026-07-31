@@ -27,6 +27,7 @@ from homeassistant.config_entries import (
 from homeassistant.core import callback
 from homeassistant.helpers import selector
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
+
 from marvin_connected_home import (
     B2CTokenProvider,
     MarvinAuthError,
@@ -279,13 +280,18 @@ class MarvinOptionsFlow(OptionsFlowWithReload):
 
     @property
     def _coordinator(self) -> Any:
-        return self.hass.data[DOMAIN][self.config_entry.entry_id]
+        return self.hass.data.get(DOMAIN, {}).get(self.config_entry.entry_id)
 
     async def async_step_init(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
         """Pick a window to configure."""
-        house = self._coordinator.data
+        coordinator = self._coordinator
+        # With setup failed or reauth pending there is no coordinator, and an
+        # unguarded lookup turns Configure into "Unknown error occurred".
+        if coordinator is None:
+            return self.async_abort(reason="entry_not_loaded")
+        house = coordinator.data
         assets = [
             asset
             for asset in (house.assets if house else [])
@@ -313,7 +319,10 @@ class MarvinOptionsFlow(OptionsFlowWithReload):
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
         assert self._asset_id is not None
-        asset = self._coordinator.asset(self._asset_id)
+        coordinator = self._coordinator
+        if coordinator is None:  # entry unloaded while the form was open
+            return self.async_abort(reason="entry_not_loaded")
+        asset = coordinator.asset(self._asset_id)
         device = asset.primary if asset else None
 
         if user_input is not None:
@@ -427,15 +436,34 @@ class MarvinOptionsFlow(OptionsFlowWithReload):
         )
 
 
+def _parameters(value: str) -> dict[str, list[str]]:
+    """Parse the parameters out of a pasted redirect URL.
+
+    Reads the **fragment** as well as the query. The authorize call asks for
+    ``response_mode=fragment`` so the code never reaches jwt.ms's server, which
+    means the paste normally looks like ``https://jwt.ms#code=...``; earlier
+    builds used query mode, and a user may paste either.
+    """
+    parsed = urlparse(value)
+    if parsed.fragment:
+        return parse_qs(parsed.fragment)
+    if parsed.query:
+        return parse_qs(parsed.query)
+    # A bare "?code=..." or "code=..." fragment of a URL, pasted on its own.
+    return parse_qs(value.lstrip("#?"))
+
+
 def _extract_code(value: str) -> str | None:
     """Accept the full redirect URL, a query string, or a bare code."""
     value = (value or "").strip().strip("'\"")
     if not value:
         return None
     if "=" not in value:
-        return value
-    query = parse_qs(urlparse(value).query or value.lstrip("?"))
-    found = query.get("code")
+        # A URL with no parameters at all cannot carry a code. Without this, a
+        # truncated paste would be treated as a bare code and fail later with
+        # the misleading "code was rejected" instead of "no code found".
+        return None if "://" in value else value
+    found = _parameters(value).get("code")
     return found[0] if found else None
 
 
@@ -444,8 +472,7 @@ def _extract_state(value: str) -> str | None:
     value = (value or "").strip().strip("'\"")
     if "=" not in value:
         return None
-    query = parse_qs(urlparse(value).query or value.lstrip("?"))
-    found = query.get("state")
+    found = _parameters(value).get("state")
     return found[0] if found else None
 
 

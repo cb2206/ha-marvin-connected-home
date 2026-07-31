@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime
-from typing import Any
+from typing import Any, ClassVar
 
 from homeassistant.components.sensor import (
     SensorDeviceClass,
@@ -23,14 +23,13 @@ from homeassistant.const import (
     UnitOfTemperature,
 )
 from homeassistant.core import HomeAssistant
-from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
-from homeassistant.helpers.update_coordinator import CoordinatorEntity
+
 from marvin_connected_home import Device, Environment
 
 from .const import DOMAIN, PATH_CLOUD, PATH_DRY_CONTACT, PATH_UNAVAILABLE
 from .coordinator import MarvinCoordinator
-from .entity import MarvinAssetEntity
+from .entity import MarvinAssetEntity, MarvinHouseEntity
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -218,7 +217,12 @@ HOUSE_SENSORS: tuple[MarvinHouseSensorDescription, ...] = (
 
 
 def _aware(value: datetime | None) -> datetime | None:
-    """HA requires timezone-aware datetimes; the API sends naive local ones."""
+    """HA requires timezone-aware datetimes; the API sends naive UTC ones.
+
+    Verified empirically: heartbeats stamped as UTC track wall-clock UTC to
+    within minutes on a live install. If they were naive *local* times this
+    would put them hours in the past.
+    """
     if value is None:
         return None
     return value if value.tzinfo else value.replace(tzinfo=UTC)
@@ -300,7 +304,7 @@ class MarvinControlPathSensor(MarvinAssetEntity, SensorEntity):
     _attr_translation_key = "control_path"
     _attr_entity_category = EntityCategory.DIAGNOSTIC
     _attr_device_class = SensorDeviceClass.ENUM
-    _attr_options = [PATH_CLOUD, PATH_DRY_CONTACT, PATH_UNAVAILABLE]
+    _attr_options: ClassVar[list[str]] = [PATH_CLOUD, PATH_DRY_CONTACT, PATH_UNAVAILABLE]
 
     def __init__(self, coordinator: MarvinCoordinator, asset_id: str) -> None:
         super().__init__(coordinator, asset_id, "control_path")
@@ -318,6 +322,14 @@ class MarvinControlPathSensor(MarvinAssetEntity, SensorEntity):
         if self.coordinator.fallback_for(self._asset_id).configured:
             return PATH_DRY_CONTACT
         return PATH_UNAVAILABLE
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        # The state says which path is in use; this says why the cloud is out.
+        # `reauthentication_required`, `cloud_unreachable` and `device_offline`
+        # all degrade identically but have different remedies, which is what
+        # an automation needs to branch on.
+        return {"degraded_reason": self.coordinator.degraded_reason(self._asset_id)}
 
 
 async def async_setup_entry(
@@ -369,27 +381,16 @@ class MarvinDeviceSensor(MarvinAssetEntity, SensorEntity):
         return None if device is None else self.entity_description.value_fn(device)
 
 
-class MarvinHouseSensor(CoordinatorEntity[MarvinCoordinator], SensorEntity):
+class MarvinHouseSensor(MarvinHouseEntity, SensorEntity):
     """House-level climate reading."""
 
-    _attr_has_entity_name = True
     entity_description: MarvinHouseSensorDescription
 
     def __init__(
         self, coordinator: MarvinCoordinator, description: MarvinHouseSensorDescription
     ) -> None:
-        super().__init__(coordinator)
+        super().__init__(coordinator, description.key)
         self.entity_description = description
-        self._attr_unique_id = f"{coordinator.house_id}_{description.key}"
-
-    @property
-    def device_info(self) -> DeviceInfo:
-        house = self.coordinator.data
-        return DeviceInfo(
-            identifiers={(DOMAIN, self.coordinator.house_id)},
-            manufacturer="Marvin",
-            name=house.name if house else "Marvin Connected Home",
-        )
 
     @property
     def available(self) -> bool:

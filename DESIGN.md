@@ -298,8 +298,9 @@ Failover is **automatic**, triggered when the cloud API is unreachable **or** `d
 - Requested position snaps to the nearest configured contact — but **only among contacts that move in the requested direction**. Going to 55% with contacts at 20/60/100 fires the 60% contact, and the cover reports 60 — not 55. An *open* request never fires the close relay, even when 0 is the nearest configured position: with only a close contact wired, "open" would otherwise close the window, the exact inversion of the user's intent. Such a request raises instead, and `OPEN`/`SET_POSITION` are not advertised while degraded unless a stop above 0 exists.
 - A *close* request errs the other way: without a close contact it snaps to the lowest stop, since moving toward closed is the right failure mode for a window it may be raining on.
 - Without a `stop_switch`, `STOP` is unsupported while degraded and raises rather than silently no-oping.
-- The `Control path` sensor always reflects reality (`cloud` / `dry_contact` / `unavailable`), so automations can branch on it.
-- Persistent notification on switchover, honouring `notify_on_switchover`.
+- The `Control path` sensor always reflects reality (`cloud` / `dry_contact` / `unavailable`), so automations can branch on it. Its `degraded_reason` attribute distinguishes `reauthentication_required` / `cloud_unreachable` / `device_offline` — same degradation, different remedies.
+- Persistent notification on switchover, honouring `notify_on_switchover`. When the degradation is a dead session rather than an outage, the notification says so and points at re-auth instead of blaming the network.
+- **A dead session degrades like an outage but is reported as what it is.** The coordinator tracks whether the last poll failed on authentication (`auth_failed`); the relays stay usable either way, because a window you can still close during rain beats doctrinal purity. Only a *per-command* auth error or rejection refuses to fall back — the contacts cannot fix those and would mask them.
 
 ### State while degraded — the honest part
 
@@ -325,7 +326,7 @@ noted below.
 | `binary_sensor`, `sensor`, `switch`, `number`, `button` | **Verified** |
 | SignalR real-time push | **Verified** |
 | Diagnostics download with redaction | Implemented |
-| Dry-contact fallback | Implemented; selection logic unit-tested, **failover never executed against real relays** |
+| Dry-contact fallback | Implemented; selection logic, command orchestration (failover trigger, pulse release/edge-guard, notification latch, pulse serialisation) unit-tested, **failover never executed against real relays** |
 | Reboot / recalibrate buttons | **Verified** — recalibrate disabled by default |
 | Auto-venting preference writes | **Verified** — note the `temp*` / `temperature*` read-write key asymmetry |
 | `PreferencesUpdated` push | **Verified** — house preferences update live rather than on the 5-minute poll |

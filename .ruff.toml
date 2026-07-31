@@ -1,0 +1,12 @@
+# Kept in the repo so CI and local runs check the same rules.
+target-version = "py313"
+
+[lint]
+select = [
+    "E4", # imports
+    "E7", # statements
+    "E9", # runtime errors
+    "F",  # pyflakes
+    "I",  # import sorting
+    "RUF",
+]
