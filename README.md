@@ -1,5 +1,7 @@
 # Marvin Connected Home for Home Assistant
 
+If you find Marvin Connected Home for Home Assistant useful, consider donating: [![Donate](https://img.shields.io/badge/Donate-PayPal-blue.svg)](https://paypal.me/cb2206)
+
 Control [Marvin Connected Home](https://www.marvin.com/solutions/connected-home) automated windows, skylights and doors from Home Assistant.
 
 **Unofficial.** Marvin publishes no public API. This is built on [`marvin-connected-home`](https://github.com/cb2206/marvin-connected-home), a reverse-engineered client. Marvin has re-platformed the service once already (Google Cloud IoT Core → Azure), so it can change without notice.
