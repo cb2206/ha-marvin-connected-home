@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+from typing import Any
+
+from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers.device_registry import CONNECTION_NETWORK_MAC, DeviceInfo
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
@@ -34,6 +37,7 @@ class MarvinHouseEntity(CoordinatorEntity[MarvinCoordinator]):
         return DeviceInfo(
             identifiers={(DOMAIN, self.coordinator.house_id)},
             manufacturer="Marvin",
+            model="Connected Home",
             name=house.name if house else "Marvin Connected Home",
         )
 
@@ -70,6 +74,9 @@ class MarvinAssetEntity(CoordinatorEntity[MarvinCoordinator]):
             identifiers={(DOMAIN, self._asset_id)},
             manufacturer="Marvin",
             name=asset.name if asset else None,
+            # Windows hang off the house in the device registry, matching how
+            # the API models them.
+            **self._via_house(),
         )
         if device is None:
             return info
@@ -82,3 +89,19 @@ class MarvinAssetEntity(CoordinatorEntity[MarvinCoordinator]):
         if device.network.mac:
             info["connections"] = {(CONNECTION_NETWORK_MAC, device.network.mac)}
         return info
+
+    def _via_house(self) -> dict[str, Any]:
+        """The ``via_device`` link to the house, in whichever form this HA takes.
+
+        2026.8 deprecated ``via_device`` (an identifier tuple) in favour of
+        ``via_device_id`` (a registry id, looked up here). The house device is
+        registered before any platform loads, so the lookup always succeeds
+        on a current install; older cores get the tuple form they understand.
+        """
+        house = (DOMAIN, self.coordinator.house_id)
+        if not hasattr(dr, "async_get_device_id_by_identifier"):
+            return {"via_device": house}
+        device_id = dr.async_get_device_id_by_identifier(
+            self.hass, house, config_entry_id=self.coordinator.entry.entry_id
+        )
+        return {"via_device_id": device_id} if device_id else {}

@@ -35,6 +35,7 @@ from homeassistant.const import (
     STATE_UNKNOWN,
 )
 from homeassistant.core import HomeAssistant
+from homeassistant.exceptions import HomeAssistantError
 
 from .const import (
     CONF_CLOSE_SWITCH,
@@ -47,6 +48,7 @@ from .const import (
     CONF_SWITCH_ENTITY,
     DEFAULT_NOTIFY_ON_SWITCHOVER,
     DEFAULT_PULSE_DURATION,
+    DOMAIN,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -170,7 +172,17 @@ async def async_pulse(hass: HomeAssistant, entity_id: str, duration: float) -> N
       into the no-edge state above.
     """
     state = hass.states.get(entity_id)
-    if state is not None and state.state == STATE_ON:
+    if state is None or state.state == STATE_UNAVAILABLE:
+        # Calling the service anyway would "succeed": Home Assistant logs a
+        # warning about the missing entity and returns normally, and the cover
+        # would then record a position it never drove to. A Zigbee coordinator
+        # down at the same time as the internet is exactly when this matters.
+        raise HomeAssistantError(
+            translation_domain=DOMAIN,
+            translation_key="relay_unavailable",
+            translation_placeholders={"entity_id": entity_id},
+        )
+    if state.state == STATE_ON:
         await hass.services.async_call(
             "switch", "turn_off", {ATTR_ENTITY_ID: entity_id}, blocking=True
         )

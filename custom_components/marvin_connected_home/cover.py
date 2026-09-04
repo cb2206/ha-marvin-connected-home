@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import asyncio
 import logging
-import re
 from typing import Any
 
 from homeassistant.components.cover import (
@@ -13,31 +12,32 @@ from homeassistant.components.cover import (
     CoverEntity,
     CoverEntityFeature,
 )
-from homeassistant.components.persistent_notification import async_create as notify
-from homeassistant.config_entries import ConfigEntry
-from homeassistant.core import HomeAssistant
+from homeassistant.core import HomeAssistant, callback
 from homeassistant.exceptions import HomeAssistantError
+from homeassistant.helpers import issue_registry as ir
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from marvin_connected_home import MarvinConnectionError, MarvinError
 
+from . import MarvinConfigEntry
 from .const import DOMAIN, PATH_CLOUD, PATH_DRY_CONTACT, PATH_UNAVAILABLE
 from .coordinator import MarvinCoordinator
 from .entity import MarvinAssetEntity, MarvinHouseEntity
 from .fallback import FallbackConfig, async_pulse, read_contact_sensor
 
+# Commands are independent REST calls to a multi-tenant cloud that handles
+# concurrency itself, and serialising them would also serialise their 15-second
+# timeouts during an outage -- the moment the fallback path most needs speed.
+# Relay pulses have their own per-window lock.
+PARALLEL_UPDATES = 0
+
 _LOGGER = logging.getLogger(__name__)
 
 
-def _escape_markdown(text: str) -> str:
-    """Backslash-escape markdown so server-supplied text renders literally."""
-    return re.sub(r"([\\*_`\[\]()#>~|])", r"\\\1", text)
-
-
 async def async_setup_entry(
-    hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback
+    hass: HomeAssistant, entry: MarvinConfigEntry, async_add_entities: AddEntitiesCallback
 ) -> None:
-    coordinator: MarvinCoordinator = hass.data[DOMAIN][entry.entry_id]
+    coordinator = entry.runtime_data
     house = coordinator.data
     if house is None:
         return
@@ -51,6 +51,13 @@ async def async_setup_entry(
     if entities:
         entities.append(MarvinHouseCover(coordinator))
     async_add_entities(entities)
+
+
+def _error(key: str, **placeholders: str) -> HomeAssistantError:
+    """A user-facing error, translated through ``strings.json``."""
+    return HomeAssistantError(
+        translation_domain=DOMAIN, translation_key=key, translation_placeholders=placeholders
+    )
 
 
 class MarvinSashCover(MarvinAssetEntity, CoverEntity):
@@ -68,6 +75,7 @@ class MarvinSashCover(MarvinAssetEntity, CoverEntity):
 
     def __init__(self, coordinator: MarvinCoordinator, asset_id: str) -> None:
         super().__init__(coordinator, asset_id, "sash")
+        #: True while a repair issue for this window's degradation is open.
         self._notified_degraded = False
         self._last_contact_position: int | None = None
         # Serialises relay pulses. Without it, two commands in quick succession
@@ -101,6 +109,13 @@ class MarvinSashCover(MarvinAssetEntity, CoverEntity):
         if self.control_path == PATH_UNAVAILABLE:
             return False
         return self.coordinator.last_update_success or self._fallback.configured
+
+    @property
+    def assumed_state(self) -> bool:
+        # On the contacts there is no position feedback beyond an optional
+        # sensor, so what is reported is inferred from the last pulse. Saying
+        # so makes the UI offer both open and close instead of hiding one.
+        return self._degraded
 
     @property
     def supported_features(self) -> CoverEntityFeature:
@@ -194,6 +209,14 @@ class MarvinSashCover(MarvinAssetEntity, CoverEntity):
             )
         return attributes
 
+    @callback
+    def _handle_coordinator_update(self) -> None:
+        # The cloud is back: retire the repair issue on the next state push
+        # rather than waiting for the user's next command.
+        if self._notified_degraded and not self._degraded:
+            self._clear_degraded_issue()
+        super()._handle_coordinator_update()
+
     # -- commands -------------------------------------------------------
 
     async def async_open_cover(self, **kwargs: Any) -> None:
@@ -215,10 +238,7 @@ class MarvinSashCover(MarvinAssetEntity, CoverEntity):
         if self._degraded:
             fallback = self._fallback
             if not fallback.can_stop:
-                raise HomeAssistantError(
-                    "Cannot stop while the Marvin cloud is unreachable: no stop "
-                    "contact is configured for this window"
-                )
+                raise _error("stop_no_contact")
             async with self._pulse_lock:
                 await async_pulse(
                     self.hass, fallback.stop_switch, fallback.pulse_duration
@@ -227,7 +247,7 @@ class MarvinSashCover(MarvinAssetEntity, CoverEntity):
 
         device = self.device
         if device is None or device.sash_position is None:
-            raise HomeAssistantError("Cannot stop: the current sash position is unknown")
+            raise _error("stop_position_unknown")
         await self._async_move(device.sash_position, allow_fallback=False)
 
     async def _async_move(self, position: int, *, allow_fallback: bool = True) -> None:
@@ -236,19 +256,26 @@ class MarvinSashCover(MarvinAssetEntity, CoverEntity):
             try:
                 await self.coordinator.client.async_set_sash_position(self._asset_id, position)
             except MarvinConnectionError as err:
-                # The cloud vanished mid-command. Fall back if we can, since the
-                # user's intent was to move the window, not to reach the cloud.
                 if not (allow_fallback and self._fallback.configured):
-                    raise HomeAssistantError(
-                        f"Could not reach the Marvin cloud: {err}"
-                    ) from err
-                _LOGGER.debug("Cloud command failed, using dry contacts: %s", err)
+                    raise _error("cloud_unreachable", error=str(err)) from err
+                # The cloud vanished mid-command -- or only seemed to. A timed-out
+                # request may still have been delivered, and pulsing a relay on
+                # top of it would hand the sash two conflicting targets. So
+                # confirm the outage first: if a poll gets through, the cloud is
+                # up and this was a transient failure to report, not an outage
+                # to fall back on.
+                await self.coordinator.async_refresh()
+                if self.coordinator.last_update_success:
+                    raise _error("cloud_command_failed", error=str(err)) from err
+                _LOGGER.debug("Cloud command failed and the outage is confirmed: %s", err)
             except MarvinError as err:
                 # An auth or per-command rejection is not a connectivity problem;
                 # the contacts would not fix it and might mask a real fault.
-                raise HomeAssistantError(f"Failed to move {self.name or 'window'}: {err}") from err
+                raise _error(
+                    "move_failed", name=self.name or "window", error=str(err)
+                ) from err
             else:
-                self._notified_degraded = False
+                self._clear_degraded_issue()
                 # The cloud moved the window, so any position remembered from a
                 # past contact pulse no longer describes reality. Clearing it
                 # keeps a *later* outage from reporting a stop driven before
@@ -257,7 +284,7 @@ class MarvinSashCover(MarvinAssetEntity, CoverEntity):
                 return
 
         if not allow_fallback:
-            raise HomeAssistantError("The Marvin cloud is unreachable")
+            raise _error("stop_cloud_unreachable")
         await self._async_move_via_contacts(position)
 
     async def _async_move_via_contacts(self, position: int) -> None:
@@ -265,14 +292,8 @@ class MarvinSashCover(MarvinAssetEntity, CoverEntity):
         stop = fallback.resolve(position)
         if stop is None:
             if position > 0 and fallback.configured:
-                raise HomeAssistantError(
-                    "The Marvin cloud is unreachable and only a close contact is "
-                    "wired for this window, so it cannot be opened right now"
-                )
-            raise HomeAssistantError(
-                "The Marvin cloud is unreachable and no dry contacts are "
-                "configured for this window"
-            )
+                raise _error("fallback_close_only")
+            raise _error("fallback_not_configured")
 
         async with self._pulse_lock:
             await async_pulse(self.hass, stop.entity_id, fallback.pulse_duration)
@@ -290,33 +311,40 @@ class MarvinSashCover(MarvinAssetEntity, CoverEntity):
 
         if fallback.notify_on_switchover and not self._notified_degraded:
             self._notified_degraded = True
-            # The window name comes from the cloud; escape it so a name
-            # containing markdown cannot restyle the notification.
-            name = _escape_markdown(self.name or self.entity_id)
-            # Blaming the network for a dead session would send the user off
-            # to check their router when the fix is signing in again.
-            if self.coordinator.auth_failed:
-                cause = (
-                    f"Your Marvin session has expired, so **{name}** was moved "
-                    "using its dry contacts. Sign in again under Settings > "
-                    "Devices & services > Marvin Connected Home to restore "
-                    "cloud control."
-                )
-            else:
-                cause = (
-                    f"The Marvin cloud is unreachable, so **{name}** was moved "
-                    "using its dry contacts."
-                )
-            notify(
-                self.hass,
-                (
-                    f"{cause} Only the positions "
-                    f"{list(fallback.available_positions)} are available while "
-                    "degraded, and position feedback is limited."
-                ),
-                title="Marvin Connected Home: using dry contacts",
-                notification_id=f"{DOMAIN}_{self._asset_id}_degraded",
-            )
+            self._create_degraded_issue(fallback)
+
+    # -- repair issue ---------------------------------------------------
+
+    @property
+    def _issue_id(self) -> str:
+        return f"degraded_{self._asset_id}"
+
+    def _create_degraded_issue(self, fallback: FallbackConfig) -> None:
+        # Blaming the network for a dead session would send the user off to
+        # check their router when the fix is signing in again, so the two
+        # causes get different issues.
+        key = (
+            "using_dry_contacts_reauth"
+            if self.coordinator.auth_failed
+            else "using_dry_contacts"
+        )
+        ir.async_create_issue(
+            self.hass,
+            DOMAIN,
+            self._issue_id,
+            is_fixable=False,
+            severity=ir.IssueSeverity.WARNING,
+            translation_key=key,
+            translation_placeholders={
+                "window": self.name or self.entity_id or "window",
+                "positions": ", ".join(f"{p}%" for p in fallback.available_positions),
+            },
+        )
+
+    def _clear_degraded_issue(self) -> None:
+        if self._notified_degraded:
+            ir.async_delete_issue(self.hass, DOMAIN, self._issue_id)
+        self._notified_degraded = False
 
 
 class MarvinHouseCover(MarvinHouseEntity, CoverEntity):
@@ -338,6 +366,9 @@ class MarvinHouseCover(MarvinHouseEntity, CoverEntity):
     _attr_translation_key = "all_windows"
     _attr_supported_features = CoverEntityFeature.OPEN | CoverEntityFeature.CLOSE
     _attr_entity_registry_enabled_default = False
+    # Write-only, so the UI must not hide one of the two buttons based on a
+    # state it does not have.
+    _attr_assumed_state = True
 
     def __init__(self, coordinator: MarvinCoordinator) -> None:
         super().__init__(coordinator, "all_windows")
@@ -358,4 +389,4 @@ class MarvinHouseCover(MarvinHouseEntity, CoverEntity):
                 self.coordinator.house_id, position
             )
         except MarvinError as err:
-            raise HomeAssistantError(f"House-wide command failed: {err}") from err
+            raise _error("house_command_failed", error=str(err)) from err

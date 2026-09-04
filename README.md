@@ -21,6 +21,8 @@ The consolation is that the cloud path is genuinely fast — verified sub-second
 
 ## Install
 
+Requires Home Assistant **2025.8** or newer.
+
 **HACS** → Custom repositories → add `https://github.com/cb2206/ha-marvin-connected-home` as an Integration → install → **restart Home Assistant**.
 
 Or copy `custom_components/marvin_connected_home/` into your config directory and restart.
@@ -121,9 +123,9 @@ Contacts are **momentary and edge-triggered** — no minimum duration. If your r
 - Requested positions **snap to the nearest configured stop that moves in the requested direction**, and the cover reports the stop it reached — not the number you asked for. An open request never fires the close relay: with only a close contact wired, "open" refuses rather than shutting the window on you.
 - `OPEN`, `SET_POSITION` and `STOP` disappear from the cover's supported features unless your wiring actually supports them — opening needs at least one open-position contact, stopping needs terminal 2.
 - **Position and open/closed report `unknown`** unless you configured your own sash contact sensor. A cover claiming 60% while shut is worse than one admitting it does not know.
-- The `Control path` sensor reflects reality, so automations can branch on it. Its `degraded_reason` attribute says *why* the cloud path is out — `reauthentication_required`, `cloud_unreachable` or `device_offline` — since the relays behave identically in all three cases but the remedy differs. An optional notification fires on switchover.
+- The `Control path` sensor reflects reality, so automations can branch on it. Its `degraded_reason` attribute says *why* the cloud path is out — `reauthentication_required`, `cloud_unreachable` or `device_offline` — since the relays behave identically in all three cases but the remedy differs. Optionally, a **repair issue** (Settings → System → Repairs) is raised on switchover and cleared on its own once the cloud is back.
 
-A cloud command that fails mid-flight on *connectivity* falls back. One that fails on a per-command auth error or rejection does not — the contacts would mask a real fault rather than fix it. If the saved *session* dies (refresh token expired or revoked), the windows stay controllable through the contacts — automations keep working — while Home Assistant asks you to sign in again, and the switchover notification says the session expired rather than blaming the network.
+A cloud command that fails mid-flight on *connectivity* falls back — after one confirming poll, because a timed-out request may still have been delivered and a relay pulse on top of it would hand the sash two conflicting targets. If the poll gets through, the cloud is up and the failure is reported instead. One that fails on a per-command auth error or rejection does not fall back — the contacts would mask a real fault rather than fix it. If the saved *session* dies (refresh token expired or revoked), the windows stay controllable through the contacts — automations keep working — while Home Assistant asks you to sign in again, and the repair issue says the session expired rather than blaming the network.
 
 ## Hardware support
 

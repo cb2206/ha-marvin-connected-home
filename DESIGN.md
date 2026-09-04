@@ -273,7 +273,7 @@ Per asset, all optional:
 | `stop_switch` | `switch` entity | terminal 2 — often unwired (4-wire runs are common) |
 | `contact_sensor` | `binary_sensor` entity | real sash open/closed, if the user fitted one |
 | `pulse_duration` | seconds, default 0.5 | ignored if the switch self-pulses |
-| `notify_on_switchover` | bool, default `true` | persistent notification toggle |
+| `notify_on_switchover` | bool, default `true` | repair-issue toggle |
 
 ### Position mapping — suggested, never hardcoded
 
@@ -299,7 +299,9 @@ Failover is **automatic**, triggered when the cloud API is unreachable **or** `d
 - A *close* request errs the other way: without a close contact it snaps to the lowest stop, since moving toward closed is the right failure mode for a window it may be raining on.
 - Without a `stop_switch`, `STOP` is unsupported while degraded and raises rather than silently no-oping.
 - The `Control path` sensor always reflects reality (`cloud` / `dry_contact` / `unavailable`), so automations can branch on it. Its `degraded_reason` attribute distinguishes `reauthentication_required` / `cloud_unreachable` / `device_offline` — same degradation, different remedies.
-- Persistent notification on switchover, honouring `notify_on_switchover`. When the degradation is a dead session rather than an outage, the notification says so and points at re-auth instead of blaming the network.
+- Repair issue on switchover, honouring `notify_on_switchover`; cleared automatically once the cloud serves the window again. When the degradation is a dead session rather than an outage, the issue says so and points at re-auth instead of blaming the network.
+- A connectivity failure *mid-command* is confirmed by one poll before any relay fires: a timed-out request may still have been delivered, and a pulse on top of it would give the sash two conflicting targets. If the poll succeeds the cloud is up and the failure is reported, not worked around.
+- A relay whose switch entity is missing or unavailable is refused rather than "pulsed": HA would accept the service call and log a warning, and the cover would then record a position it never drove to.
 - **A dead session degrades like an outage but is reported as what it is.** The coordinator tracks whether the last poll failed on authentication (`auth_failed`); the relays stay usable either way, because a window you can still close during rain beats doctrinal purity. Only a *per-command* auth error or rejection refuses to fall back — the contacts cannot fix those and would mask them.
 
 ### State while degraded — the honest part
@@ -326,7 +328,7 @@ noted below.
 | `binary_sensor`, `sensor`, `switch`, `number`, `button` | **Verified** |
 | SignalR real-time push | **Verified** |
 | Diagnostics download with redaction | Implemented |
-| Dry-contact fallback | Implemented; selection logic, command orchestration (failover trigger, pulse release/edge-guard, notification latch, pulse serialisation) unit-tested, **failover never executed against real relays** |
+| Dry-contact fallback | Implemented; selection logic, command orchestration (failover trigger with outage confirmation, pulse release/edge-guard, repair-issue latch, pulse serialisation) unit-tested and exercised inside a real Home Assistant (`tests_ha/`), **failover never executed against real relays** |
 | Reboot / recalibrate buttons | **Verified** — recalibrate disabled by default |
 | Auto-venting preference writes | **Verified** — note the `temp*` / `temperature*` read-write key asymmetry |
 | `PreferencesUpdated` push | **Verified** — house preferences update live rather than on the 5-minute poll |
@@ -467,7 +469,7 @@ terminal 2 is unwired.
 - **Diagnostics download must redact** bearer tokens, SignalR access tokens, email, MAC, IP, and house/asset UUIDs.
 - **Reauth flow** required, given the auth model. It verifies the new sign-in can actually see the entry's house and aborts with `reauth_account_mismatch` otherwise — signing in with the wrong Marvin account would otherwise "succeed" and then break at the next poll.
 - **The config flow's OAuth `state` is random per flow** and checked on paste-back. A pasted URL carrying someone else's state is rejected (`state_mismatch`); a bare code is accepted, since it carries no state to check. PKCE binds the code; state binds the URL.
-- **Options flow** for the dry-contact mapping and notification toggle, so they're editable after setup.
+- **Options flow** for the dry-contact mapping and repair-issue toggle, so they're editable after setup.
 - **README must be explicit** about verified vs inferred hardware. Users with skylights or multi-slide doors should know they're the first to test that path.
 - Unofficial-API disclaimer: Marvin has re-platformed once already (Google Cloud IoT Core → Azure), so the API can change without notice.
 - **CI** runs on both repos: ruff + strict mypy + pytest on the library; pytest, hassfest and HACS validation here. The library release process is: tag `vX.Y.Z` on the library, which triggers its `release.yml` workflow to build and publish that version to PyPI; then pin `manifest.json`'s requirement to `marvin-connected-home==X.Y.Z` and bump the integration version.

@@ -8,6 +8,7 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ConfigEntryAuthFailed, ConfigEntryNotReady
+from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
 from marvin_connected_home import (
@@ -33,8 +34,10 @@ PLATFORMS: list[Platform] = [
     Platform.SWITCH,
 ]
 
+type MarvinConfigEntry = ConfigEntry[MarvinCoordinator]
 
-async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
+
+async def async_setup_entry(hass: HomeAssistant, entry: MarvinConfigEntry) -> bool:
     session = async_get_clientsession(hass)
 
     def _persist_refresh_token(token: str) -> None:
@@ -67,6 +70,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     client = MarvinClient(session, provider)
     realtime = MarvinRealtime(session, provider)
+    # Passing the entry makes the coordinator register its own shutdown on
+    # unload -- and on a setup that fails part-way -- so the realtime task
+    # started below can never outlive the entry.
     coordinator = MarvinCoordinator(
         hass, entry, client, realtime, entry.data[CONF_HOUSE_ID]
     )
@@ -74,7 +80,18 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     await coordinator.async_config_entry_first_refresh()
     await coordinator.async_start_realtime()
 
-    hass.data.setdefault(DOMAIN, {})[entry.entry_id] = coordinator
+    # The house is the hub device every window links to, so it has to exist
+    # before any platform registers a window against it.
+    house = coordinator.data
+    dr.async_get(hass).async_get_or_create(
+        config_entry_id=entry.entry_id,
+        identifiers={(DOMAIN, coordinator.house_id)},
+        manufacturer="Marvin",
+        model="Connected Home",
+        name=(house.name if house else None) or "Marvin Connected Home",
+    )
+
+    entry.runtime_data = coordinator
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     # No update listener here: the options flow is an OptionsFlowWithReload,
     # which reloads the entry itself. Registering a listener as well makes HA
@@ -82,9 +99,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     return True
 
 
-async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
-    unloaded = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
-    if unloaded:
-        coordinator: MarvinCoordinator = hass.data[DOMAIN].pop(entry.entry_id)
-        await coordinator.async_shutdown()
-    return unloaded
+async def async_unload_entry(hass: HomeAssistant, entry: MarvinConfigEntry) -> bool:
+    # The coordinator shuts itself down through the entry's unload hooks.
+    return await hass.config_entries.async_unload_platforms(entry, PLATFORMS)

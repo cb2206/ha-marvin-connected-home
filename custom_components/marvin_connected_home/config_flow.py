@@ -20,6 +20,7 @@ from urllib.parse import parse_qs, urlparse
 import voluptuous as vol
 from homeassistant.config_entries import (
     ConfigEntry,
+    ConfigEntryState,
     ConfigFlow,
     ConfigFlowResult,
     OptionsFlowWithReload,
@@ -106,6 +107,10 @@ class MarvinConfigFlow(ConfigFlow, domain=DOMAIN):
             B2C_REDIRECT_URI, challenge, state=self._state
         )
 
+    @callback
+    def _remember_refresh_token(self, token: str) -> None:
+        self._refresh_token = token
+
     def _check_pasted(self, value: str) -> tuple[str | None, str | None]:
         """Return ``(code, error)`` for a pasted redirect URL."""
         code = _extract_code(value)
@@ -164,7 +169,15 @@ class MarvinConfigFlow(ConfigFlow, domain=DOMAIN):
         """Pick a house. Accounts may hold more than one."""
         session = async_get_clientsession(self.hass)
         assert self._refresh_token is not None
-        provider = B2CTokenProvider(session, refresh_token=self._refresh_token)
+        # Listing houses redeems the refresh token, which rotates it. The entry
+        # must be created with the token that came *back*, not the one that
+        # went in: the old one is single-use, and storing it would leave the
+        # very first setup-time renewal with a dead credential.
+        provider = B2CTokenProvider(
+            session,
+            refresh_token=self._refresh_token,
+            on_refresh_token_update=self._remember_refresh_token,
+        )
         client = MarvinClient(session, provider)
 
         if not self._houses:
@@ -280,7 +293,11 @@ class MarvinOptionsFlow(OptionsFlowWithReload):
 
     @property
     def _coordinator(self) -> Any:
-        return self.hass.data.get(DOMAIN, {}).get(self.config_entry.entry_id)
+        # `runtime_data` only exists on a loaded entry; with setup failed or
+        # reauth pending there is nothing to configure against.
+        if self.config_entry.state is not ConfigEntryState.LOADED:
+            return None
+        return getattr(self.config_entry, "runtime_data", None)
 
     async def async_step_init(
         self, user_input: dict[str, Any] | None = None

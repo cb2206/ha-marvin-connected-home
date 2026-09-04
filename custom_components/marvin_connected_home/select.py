@@ -18,7 +18,6 @@ from __future__ import annotations
 from typing import ClassVar
 
 from homeassistant.components.select import SelectEntity
-from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import EntityCategory
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import HomeAssistantError
@@ -26,9 +25,12 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from marvin_connected_home import MarvinError
 
+from . import MarvinConfigEntry
 from .const import DOMAIN
 from .coordinator import MarvinCoordinator
 from .entity import MarvinHouseEntity
+
+PARALLEL_UPDATES = 0
 
 PREFERENCE_KEY = "humidityDewPointToggle"
 
@@ -38,9 +40,9 @@ OPTIONS = {"humidity": "humidity", "dew_point": "dew_point"}
 
 
 async def async_setup_entry(
-    hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback
+    hass: HomeAssistant, entry: MarvinConfigEntry, async_add_entities: AddEntitiesCallback
 ) -> None:
-    coordinator: MarvinCoordinator = hass.data[DOMAIN][entry.entry_id]
+    coordinator = entry.runtime_data
     if coordinator.data is None:
         return
     async_add_entities([MarvinMoistureMetricSelect(coordinator)])
@@ -70,5 +72,9 @@ class MarvinMoistureMetricSelect(MarvinHouseEntity, SelectEntity):
                 self.coordinator.house_id, **{PREFERENCE_KEY: option}
             )
         except MarvinError as err:
-            raise HomeAssistantError(f"Could not change the moisture metric: {err}") from err
+            raise HomeAssistantError(
+                translation_domain=DOMAIN,
+                translation_key="moisture_metric_failed",
+                translation_placeholders={"error": str(err)},
+            ) from err
         await self.coordinator.async_request_refresh()

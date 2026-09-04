@@ -46,3 +46,7 @@ REASON_DEVICE: Final = "device_offline"
 SCAN_INTERVAL_SECONDS: Final = 300
 """Backstop only. State normally arrives over SignalR within a second; this
 exists to recover if the socket silently dies."""
+
+SCAN_INTERVAL_PUSH_DOWN_SECONDS: Final = 60
+"""While the SignalR connection is known to be down, polling is the only
+source of state, so it runs more often."""

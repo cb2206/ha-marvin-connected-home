@@ -9,7 +9,9 @@ having run against real relays:
   would mask them;
 * a degraded window never touches the cloud client, and a healthy one never
   pulses a relay;
-* the switchover notification fires once per degradation, not per command;
+* a connectivity failure mid-command is *confirmed* by a poll before any relay
+  moves, so a timed-out command that was in fact delivered is not doubled;
+* the switchover repair issue is raised once per degradation, not per command;
 * concurrent commands cannot interleave their relay pulses.
 
 Home Assistant is stubbed in `conftest.py`, so this runs without an install.
@@ -27,6 +29,7 @@ _cover = importlib.import_module("marvin_connected_home.cover")
 _exceptions = importlib.import_module("homeassistant.exceptions")
 _library = importlib.import_module("marvin_connected_home")
 _fallback = importlib.import_module("marvin_connected_home.fallback")
+_issues = importlib.import_module("homeassistant.helpers.issue_registry")
 
 MarvinSashCover = _cover.MarvinSashCover
 CoverEntityFeature = importlib.import_module(
@@ -44,13 +47,22 @@ P2 = "switch.open_60"
 
 
 class FakeHass:
-    """Records switch service calls; vends states for the contact sensor."""
+    """Records switch service calls; vends states for the contact sensor.
+
+    Every relay switch exists and is off unless a test says otherwise, since a
+    pulse now refuses to fire at an entity that is missing or unavailable.
+    """
 
     def __init__(self) -> None:
         self.calls: list[tuple[str, str]] = []
         self._states: dict[str, SimpleNamespace] = {}
         self.services = SimpleNamespace(async_call=self._async_call)
-        self.states = SimpleNamespace(get=self._states.get)
+        self.states = SimpleNamespace(get=self._get_state)
+
+    def _get_state(self, entity_id: str) -> SimpleNamespace | None:
+        if entity_id in self._states:
+            return self._states[entity_id]
+        return SimpleNamespace(state="off") if entity_id.startswith("switch.") else None
 
     async def _async_call(self, domain, service, data, blocking=False):
         self.calls.append((service, data["entity_id"]))
@@ -75,10 +87,15 @@ class FakeCoordinator:
         fallback_raw: dict | None = None,
         error: Exception | None = None,
         sash_position: int | None = 42,
+        outage: bool | None = None,
     ) -> None:
         self.last_update_success = True
         self.auth_failed = False
         self.client = FakeClient(error)
+        # What a confirming poll finds. Defaults to "the cloud is really down"
+        # whenever the client is set to fail with a connection error.
+        self._outage = isinstance(error, MarvinConnectionError) if outage is None else outage
+        self.refreshes = 0
         self._reachable = reachable
         self._fallback_raw = fallback_raw
         self._asset = SimpleNamespace(
@@ -96,6 +113,12 @@ class FakeCoordinator:
 
     def device_reachable(self, asset_id: str) -> bool:
         return self._reachable
+
+    async def async_refresh(self) -> None:
+        self.refreshes += 1
+        self.last_update_success = not self._outage
+        if self._outage:
+            self._reachable = False
 
     def asset(self, asset_id: str):
         return self._asset
@@ -159,8 +182,33 @@ class TestFailover:
         cover, hass = make_cover(coordinator)
         asyncio.run(cover.async_set_cover_position(position=55))
         assert coordinator.client.calls == [(ASSET, 55)], "cloud is tried first"
+        assert coordinator.refreshes == 1, "the outage is confirmed by a poll first"
         assert hass.calls == [("turn_on", P2)], "55% snaps to the 60% stop"
         assert cover._last_contact_position == 60
+
+    def test_transient_failure_with_cloud_up_does_not_fall_back(self) -> None:
+        """A timed-out command may have been delivered. If the confirming poll
+        gets through, the cloud is up and a relay pulse would hand the sash a
+        second, conflicting target -- so this must raise instead."""
+        coordinator = FakeCoordinator(
+            fallback_raw=WIRED, error=MarvinConnectionError("timeout"), outage=False
+        )
+        cover, hass = make_cover(coordinator)
+        with pytest.raises(HomeAssistantError) as excinfo:
+            asyncio.run(cover.async_set_cover_position(position=55))
+        assert excinfo.value.translation_key == "cloud_command_failed"
+        assert hass.calls == []
+        assert cover._last_contact_position is None
+
+    def test_missing_relay_entity_raises_instead_of_pretending(self) -> None:
+        coordinator = FakeCoordinator(reachable=False, fallback_raw=WIRED)
+        cover, hass = make_cover(coordinator)
+        hass._states[CLOSE] = SimpleNamespace(state="unavailable")
+        with pytest.raises(HomeAssistantError) as excinfo:
+            asyncio.run(cover.async_close_cover())
+        assert excinfo.value.translation_key == "relay_unavailable"
+        assert hass.calls == []
+        assert cover._last_contact_position is None
 
     def test_connection_error_without_fallback_raises(self) -> None:
         coordinator = FakeCoordinator(error=MarvinConnectionError("down"))
@@ -213,55 +261,57 @@ class TestFailover:
         assert hass.calls == []
 
 
-class TestNotification:
-    def test_fires_once_per_degradation(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        notifications: list[str] = []
-        monkeypatch.setattr(
-            _cover, "notify", lambda hass, message, **kwargs: notifications.append(message)
-        )
+class TestRepairIssue:
+    @pytest.fixture(autouse=True)
+    def _clear_issues(self) -> None:
+        _issues.issues.clear()
+
+    def test_raised_once_per_degradation(self) -> None:
         coordinator = FakeCoordinator(reachable=False, fallback_raw=WIRED)
         cover, _hass = make_cover(coordinator)
 
         asyncio.run(cover.async_close_cover())
+        first = dict(_issues.issues)
         asyncio.run(cover.async_open_cover())
-        assert len(notifications) == 1, "second command during one outage is silent"
+        assert len(_issues.issues) == 1, "second command during one outage is silent"
+        assert _issues.issues == first
 
-        # Cloud recovers, then fails again: a fresh degradation notifies again.
+        # Cloud recovers: the issue clears on the next successful command.
         coordinator._reachable = True
         asyncio.run(cover.async_open_cover())
+        assert _issues.issues == {}
+        # And a fresh degradation raises it again.
         coordinator._reachable = False
         asyncio.run(cover.async_close_cover())
-        assert len(notifications) == 2
+        assert len(_issues.issues) == 1
 
-    def test_dead_session_is_not_blamed_on_the_network(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_clears_when_a_state_push_shows_the_cloud_back(self) -> None:
+        coordinator = FakeCoordinator(reachable=False, fallback_raw=WIRED)
+        cover, _hass = make_cover(coordinator)
+        asyncio.run(cover.async_close_cover())
+        assert len(_issues.issues) == 1
+        coordinator._reachable = True
+        cover._handle_coordinator_update()
+        assert _issues.issues == {}
+
+    def test_dead_session_is_not_blamed_on_the_network(self) -> None:
         """Telling the user the cloud is unreachable when their session expired
         sends them to check the router instead of signing in again."""
-        notifications: list[str] = []
-        monkeypatch.setattr(
-            _cover, "notify", lambda hass, message, **kwargs: notifications.append(message)
-        )
         coordinator = FakeCoordinator(reachable=False, fallback_raw=WIRED)
         coordinator.auth_failed = True
         cover, _hass = make_cover(coordinator)
         asyncio.run(cover.async_close_cover())
-        assert len(notifications) == 1
-        assert "session has expired" in notifications[0]
-        assert "Sign in again" in notifications[0]
-        assert "unreachable" not in notifications[0]
+        (issue,) = _issues.issues.values()
+        assert issue["translation_key"] == "using_dry_contacts_reauth"
+        assert issue["translation_placeholders"]["positions"] == "0%, 20%, 60%"
 
-    def test_honours_the_opt_out(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        notifications: list[str] = []
-        monkeypatch.setattr(
-            _cover, "notify", lambda hass, message, **kwargs: notifications.append(message)
-        )
+    def test_honours_the_opt_out(self) -> None:
         coordinator = FakeCoordinator(
             reachable=False, fallback_raw={**WIRED, "notify_on_switchover": False}
         )
         cover, _hass = make_cover(coordinator)
         asyncio.run(cover.async_close_cover())
-        assert notifications == []
+        assert _issues.issues == {}
 
 
 class TestSupportedFeatures:

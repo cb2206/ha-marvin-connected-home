@@ -13,7 +13,6 @@ from homeassistant.components.sensor import (
     SensorEntityDescription,
     SensorStateClass,
 )
-from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import (
     CONCENTRATION_MICROGRAMS_PER_CUBIC_METER,
     CONCENTRATION_PARTS_PER_MILLION,
@@ -27,9 +26,12 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from marvin_connected_home import Device, Environment
 
-from .const import DOMAIN, PATH_CLOUD, PATH_DRY_CONTACT, PATH_UNAVAILABLE
+from . import MarvinConfigEntry
+from .const import PATH_CLOUD, PATH_DRY_CONTACT, PATH_UNAVAILABLE
 from .coordinator import MarvinCoordinator
 from .entity import MarvinAssetEntity, MarvinHouseEntity
+
+PARALLEL_UPDATES = 0
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -333,9 +335,9 @@ class MarvinControlPathSensor(MarvinAssetEntity, SensorEntity):
 
 
 async def async_setup_entry(
-    hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback
+    hass: HomeAssistant, entry: MarvinConfigEntry, async_add_entities: AddEntitiesCallback
 ) -> None:
-    coordinator: MarvinCoordinator = hass.data[DOMAIN][entry.entry_id]
+    coordinator = entry.runtime_data
     house = coordinator.data
     if house is None:
         return

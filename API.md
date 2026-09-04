@@ -213,7 +213,7 @@ One key per request, same as house preferences. Keys: `windowObstructions`, `win
 
 ```http
 PUT /houses/{houseId}
-{"houseName":"Inca","zipCode":"80303","latitude":"0","longitude":"0"}
+{"houseName":"Inca","zipCode":"12345","latitude":"0","longitude":"0"}
 → 200
 ```
 

@@ -105,8 +105,22 @@ _module(
     HomeAssistant=_stub("HomeAssistant"),
     callback=lambda func: func,
 )
-_module("homeassistant.config_entries", ConfigEntry=_stub("ConfigEntry"))
-_HomeAssistantError = type("HomeAssistantError", (Exception,), {})
+_module(
+    "homeassistant.config_entries",
+    ConfigEntry=_stub("ConfigEntry"),
+    ConfigEntryState=_Constants(),
+)
+
+
+class _HomeAssistantError(Exception):
+    """Accepts the translation keyword arguments the component passes."""
+
+    def __init__(self, *args: object, **kwargs: object) -> None:
+        super().__init__(*args)
+        self.translation_key = kwargs.get("translation_key")
+        self.translation_placeholders = kwargs.get("translation_placeholders")
+
+
 _module(
     "homeassistant.exceptions",
     HomeAssistantError=_HomeAssistantError,
@@ -140,6 +154,9 @@ class _CoordinatorEntity:
     def async_write_ha_state(self) -> None:
         pass
 
+    def _handle_coordinator_update(self) -> None:
+        pass
+
 
 class _CoverEntityFeature(enum.IntFlag):
     """Real Home Assistant values, so feature-mask assertions mean something."""
@@ -157,10 +174,27 @@ _module(
     CoverDeviceClass=_Constants(),
     CoverEntityFeature=_CoverEntityFeature,
 )
-_module(
-    "homeassistant.components.persistent_notification",
-    async_create=lambda *args, **kwargs: None,
-)
+
+
+class _IssueRegistry:
+    """Records repair issues so tests can assert on them."""
+
+    IssueSeverity = _Constants()
+
+    def __init__(self) -> None:
+        self.issues: dict[tuple[str, str], dict] = {}
+
+    def async_create_issue(self, hass, domain, issue_id, **kwargs) -> None:
+        self.issues[(domain, issue_id)] = kwargs
+
+    def async_delete_issue(self, hass, domain, issue_id) -> None:
+        self.issues.pop((domain, issue_id), None)
+
+
+issue_registry = _IssueRegistry()
+_helpers_pkg = _module("homeassistant.helpers")
+_helpers_pkg.issue_registry = issue_registry
+sys.modules["homeassistant.helpers.issue_registry"] = issue_registry  # type: ignore[assignment]
 _module(
     "homeassistant.components.button",
     ButtonEntity=_stub("ButtonEntity"),
@@ -184,6 +218,7 @@ _module(
     "homeassistant.components.number",
     NumberEntity=_stub("NumberEntity"),
     NumberEntityDescription=EntityDescription,
+    NumberDeviceClass=_Constants(),
     NumberMode=_Constants(),
 )
 _module(
@@ -214,6 +249,10 @@ class _DataUpdateCoordinator:
 
     def async_set_updated_data(self, data) -> None:
         self.data = data
+        self.last_update_success = True
+
+    def async_update_listeners(self) -> None:
+        pass
 
     async def async_shutdown(self) -> None:
         pass
@@ -242,6 +281,9 @@ _MarvinError = type("MarvinError", (Exception,), {})
 
 _component_pkg = _module(
     "marvin_connected_home",
+    # The component's own typed config-entry alias, normally defined in its
+    # __init__ -- which is exactly the module these stubs avoid executing.
+    MarvinConfigEntry=_stub("MarvinConfigEntry"),
     MarvinClient=_stub("MarvinClient"),
     MarvinError=_MarvinError,
     # Connectivity failures are the one class the cover is allowed to fall

@@ -7,7 +7,6 @@ from dataclasses import dataclass
 from typing import Any
 
 from homeassistant.components.switch import SwitchEntity, SwitchEntityDescription
-from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import EntityCategory
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import HomeAssistantError
@@ -15,9 +14,12 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from marvin_connected_home import Device, MarvinError
 
+from . import MarvinConfigEntry
 from .const import DOMAIN
 from .coordinator import MarvinCoordinator
 from .entity import MarvinAssetEntity, MarvinHouseEntity
+
+PARALLEL_UPDATES = 0
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -89,9 +91,9 @@ PREFERENCE_SWITCHES: tuple[MarvinPreferenceSwitchDescription, ...] = (
 
 
 async def async_setup_entry(
-    hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback
+    hass: HomeAssistant, entry: MarvinConfigEntry, async_add_entities: AddEntitiesCallback
 ) -> None:
-    coordinator: MarvinCoordinator = hass.data[DOMAIN][entry.entry_id]
+    coordinator = entry.runtime_data
     house = coordinator.data
     if house is None:
         return
@@ -137,7 +139,11 @@ class MarvinConfigSwitch(MarvinAssetEntity, SwitchEntity):
                 self._asset_id, self.entity_description.config_key, stored
             )
         except MarvinError as err:
-            raise HomeAssistantError(f"Could not update setting: {err}") from err
+            raise HomeAssistantError(
+                translation_domain=DOMAIN,
+                translation_key="setting_failed",
+                translation_placeholders={"error": str(err)},
+            ) from err
         await self.coordinator.async_request_refresh()
 
 
@@ -171,7 +177,11 @@ class MarvinAutoVentingSwitch(MarvinHouseEntity, SwitchEntity):
                 self.coordinator.house_id, enabled
             )
         except MarvinError as err:
-            raise HomeAssistantError(f"Could not change auto venting: {err}") from err
+            raise HomeAssistantError(
+                translation_domain=DOMAIN,
+                translation_key="auto_venting_failed",
+                translation_placeholders={"error": str(err)},
+            ) from err
         await self.coordinator.async_request_refresh()
 
 
@@ -214,5 +224,9 @@ class MarvinPreferenceSwitch(MarvinHouseEntity, SwitchEntity):
                 **{self.entity_description.preference_key: enabled},
             )
         except MarvinError as err:
-            raise HomeAssistantError(f"Could not change the venting condition: {err}") from err
+            raise HomeAssistantError(
+                translation_domain=DOMAIN,
+                translation_key="venting_condition_failed",
+                translation_placeholders={"error": str(err)},
+            ) from err
         await self.coordinator.async_request_refresh()

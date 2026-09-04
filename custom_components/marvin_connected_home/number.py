@@ -17,11 +17,11 @@ from collections.abc import Callable
 from dataclasses import dataclass
 
 from homeassistant.components.number import (
+    NumberDeviceClass,
     NumberEntity,
     NumberEntityDescription,
     NumberMode,
 )
-from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import PERCENTAGE, EntityCategory, UnitOfTemperature
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import HomeAssistantError
@@ -29,9 +29,12 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from marvin_connected_home import Device, House, MarvinError
 
+from . import MarvinConfigEntry
 from .const import DOMAIN
 from .coordinator import MarvinCoordinator
 from .entity import MarvinAssetEntity, MarvinHouseEntity
+
+PARALLEL_UPDATES = 0
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -76,6 +79,9 @@ LIMITS: tuple[MarvinLimitDescription, ...] = (
     MarvinLimitDescription(
         key="temperature_lower_limit",
         translation_key="temperature_lower_limit",
+        # Lets Home Assistant convert to the user's display unit; without a
+        # device class a Celsius user sees Fahrenheit limits verbatim.
+        device_class=NumberDeviceClass.TEMPERATURE,
         preference_key="temperatureLowerLimit",
         native_unit_of_measurement=UnitOfTemperature.FAHRENHEIT,
         # Marvin's own app offers roughly this span. The API has not been
@@ -87,6 +93,9 @@ LIMITS: tuple[MarvinLimitDescription, ...] = (
     MarvinLimitDescription(
         key="temperature_upper_limit",
         translation_key="temperature_upper_limit",
+        # Lets Home Assistant convert to the user's display unit; without a
+        # device class a Celsius user sees Fahrenheit limits verbatim.
+        device_class=NumberDeviceClass.TEMPERATURE,
         preference_key="temperatureUpperLimit",
         native_unit_of_measurement=UnitOfTemperature.FAHRENHEIT,
         native_min_value=35,
@@ -96,6 +105,7 @@ LIMITS: tuple[MarvinLimitDescription, ...] = (
     MarvinLimitDescription(
         key="humidity_lower_limit",
         translation_key="humidity_lower_limit",
+        device_class=NumberDeviceClass.HUMIDITY,
         preference_key="humidityLowerLimit",
         native_unit_of_measurement=PERCENTAGE,
         native_min_value=0,
@@ -105,6 +115,7 @@ LIMITS: tuple[MarvinLimitDescription, ...] = (
     MarvinLimitDescription(
         key="humidity_upper_limit",
         translation_key="humidity_upper_limit",
+        device_class=NumberDeviceClass.HUMIDITY,
         preference_key="humidityUpperLimit",
         native_unit_of_measurement=PERCENTAGE,
         native_min_value=0,
@@ -115,9 +126,9 @@ LIMITS: tuple[MarvinLimitDescription, ...] = (
 
 
 async def async_setup_entry(
-    hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback
+    hass: HomeAssistant, entry: MarvinConfigEntry, async_add_entities: AddEntitiesCallback
 ) -> None:
-    coordinator: MarvinCoordinator = hass.data[DOMAIN][entry.entry_id]
+    coordinator = entry.runtime_data
     house = coordinator.data
     if house is None:
         return
@@ -161,7 +172,11 @@ class MarvinContactPosition(MarvinAssetEntity, NumberEntity):
                 self._asset_id, self.entity_description.contact_index, int(value)
             )
         except MarvinError as err:
-            raise HomeAssistantError(f"Could not set contact position: {err}") from err
+            raise HomeAssistantError(
+                translation_domain=DOMAIN,
+                translation_key="contact_position_failed",
+                translation_placeholders={"error": str(err)},
+            ) from err
         await self.coordinator.async_request_refresh()
 
 
@@ -196,7 +211,11 @@ class MarvinLimitNumber(MarvinHouseEntity, NumberEntity):
                 **{self.entity_description.preference_key: int(value)},
             )
         except MarvinError as err:
-            raise HomeAssistantError(f"Could not set the limit: {err}") from err
+            raise HomeAssistantError(
+                translation_domain=DOMAIN,
+                translation_key="limit_failed",
+                translation_placeholders={"error": str(err)},
+            ) from err
         await self.coordinator.async_request_refresh()
 
 

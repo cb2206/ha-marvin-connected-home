@@ -1,0 +1,125 @@
+{
+  "entity": {
+    "binary_sensor": {
+      "open_condition_met": {
+        "default": "mdi:window-closed-variant",
+        "state": {
+          "on": "mdi:window-open-variant"
+        }
+      }
+    },
+    "button": {
+      "recalibrate": {
+        "default": "mdi:ruler-square-compass"
+      }
+    },
+    "cover": {
+      "all_windows": {
+        "default": "mdi:window-open-variant",
+        "state": {
+          "closed": "mdi:window-closed-variant"
+        }
+      }
+    },
+    "number": {
+      "contact_position_1": {
+        "default": "mdi:electric-switch"
+      },
+      "contact_position_2": {
+        "default": "mdi:electric-switch"
+      },
+      "contact_position_3": {
+        "default": "mdi:electric-switch"
+      },
+      "temperature_lower_limit": {
+        "default": "mdi:thermometer-chevron-down"
+      },
+      "temperature_upper_limit": {
+        "default": "mdi:thermometer-chevron-up"
+      },
+      "humidity_lower_limit": {
+        "default": "mdi:water-minus"
+      },
+      "humidity_upper_limit": {
+        "default": "mdi:water-plus"
+      }
+    },
+    "select": {
+      "moisture_metric": {
+        "default": "mdi:water-thermometer"
+      }
+    },
+    "sensor": {
+      "target_position": {
+        "default": "mdi:target"
+      },
+      "fw_window_control_board": {
+        "default": "mdi:chip"
+      },
+      "fw_on_unit": {
+        "default": "mdi:chip"
+      },
+      "fw_rain_sensor": {
+        "default": "mdi:chip"
+      },
+      "fw_motor_control_board": {
+        "default": "mdi:chip"
+      },
+      "fw_remote": {
+        "default": "mdi:chip"
+      },
+      "indoor_air_quality": {
+        "default": "mdi:air-filter"
+      },
+      "outdoor_air_quality": {
+        "default": "mdi:air-filter"
+      },
+      "outdoor_conditions": {
+        "default": "mdi:weather-partly-cloudy"
+      },
+      "control_path": {
+        "default": "mdi:cloud-question",
+        "state": {
+          "cloud": "mdi:cloud-check",
+          "dry_contact": "mdi:electric-switch",
+          "unavailable": "mdi:cloud-off"
+        }
+      },
+      "fallback_summary": {
+        "default": "mdi:electric-switch"
+      }
+    },
+    "switch": {
+      "close_when_raining": {
+        "default": "mdi:weather-rainy"
+      },
+      "buzzer": {
+        "default": "mdi:volume-high",
+        "state": {
+          "off": "mdi:volume-off"
+        }
+      },
+      "on_unit_led": {
+        "default": "mdi:led-on",
+        "state": {
+          "off": "mdi:led-off"
+        }
+      },
+      "auto_venting": {
+        "default": "mdi:fan-auto"
+      },
+      "temperature_open_if": {
+        "default": "mdi:thermometer"
+      },
+      "temperature_close_if": {
+        "default": "mdi:thermometer"
+      },
+      "humidity_open_if": {
+        "default": "mdi:water-percent"
+      },
+      "humidity_close_if": {
+        "default": "mdi:water-percent"
+      }
+    }
+  }
+}

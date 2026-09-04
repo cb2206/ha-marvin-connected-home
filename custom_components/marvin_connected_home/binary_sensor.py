@@ -10,16 +10,17 @@ from homeassistant.components.binary_sensor import (
     BinarySensorEntity,
     BinarySensorEntityDescription,
 )
-from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import EntityCategory
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from marvin_connected_home import Asset, Capabilities, Device
 
-from .const import DOMAIN
+from . import MarvinConfigEntry
 from .coordinator import MarvinCoordinator
 from .entity import MarvinAssetEntity, MarvinHouseEntity
+
+PARALLEL_UPDATES = 0
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -95,9 +96,9 @@ ASSET_SENSORS: tuple[MarvinAssetBinarySensorDescription, ...] = (
 
 
 async def async_setup_entry(
-    hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback
+    hass: HomeAssistant, entry: MarvinConfigEntry, async_add_entities: AddEntitiesCallback
 ) -> None:
-    coordinator: MarvinCoordinator = hass.data[DOMAIN][entry.entry_id]
+    coordinator = entry.runtime_data
     house = coordinator.data
     if house is None:
         return

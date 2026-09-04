@@ -33,7 +33,8 @@
       "already_configured": "This house is already set up.",
       "cannot_connect": "Could not reach Marvin's servers.",
       "no_houses": "No houses were found on this Marvin account.",
-      "reauth_account_mismatch": "That Marvin account cannot see this house. Sign in with the account this house was originally set up with."
+      "reauth_account_mismatch": "That Marvin account cannot see this house. Sign in with the account this house was originally set up with.",
+      "reauth_successful": "Signed in again. Cloud control is restored."
     }
   },
   "entity": {
@@ -231,17 +232,90 @@
           "stop_switch": "Stop (terminal 2, often not wired)",
           "contact_sensor": "Sash contact sensor (optional)",
           "pulse_duration": "Pulse duration in seconds (0 if the switch pulses itself)",
-          "notify_on_switchover": "Notify when falling back to dry contacts"
+          "notify_on_switchover": "Raise a repair issue when falling back to dry contacts"
         },
         "data_description": {
           "contact_sensor": "Without one, position and open/closed report as unknown while the cloud is down. Home Assistant will not guess.",
-          "pulse_duration": "Contacts are edge-triggered, so this only has to be long enough for the relay to actuate."
+          "pulse_duration": "Contacts are edge-triggered, so this only has to be long enough for the relay to actuate.",
+          "notify_on_switchover": "Shown under Settings > System > Repairs while a window is being driven through its contacts, with the reason (outage or expired session). Cleared automatically when the cloud is back."
         }
       }
     },
     "abort": {
       "no_sashes": "No windows with a movable sash were found.",
       "entry_not_loaded": "The integration is not currently loaded. Fix its setup (or finish signing in again) and retry."
+    }
+  },
+  "exceptions": {
+    "stop_no_contact": {
+      "message": "Cannot stop while the Marvin cloud is unreachable: no stop contact is configured for this window."
+    },
+    "stop_position_unknown": {
+      "message": "Cannot stop: the current sash position is unknown."
+    },
+    "stop_cloud_unreachable": {
+      "message": "Cannot stop: the Marvin cloud is unreachable, and stopping has no dry-contact fallback."
+    },
+    "cloud_unreachable": {
+      "message": "Could not reach the Marvin cloud: {error}"
+    },
+    "cloud_command_failed": {
+      "message": "The command did not get through, but the Marvin cloud is reachable; try again. ({error})"
+    },
+    "move_failed": {
+      "message": "Failed to move {name}: {error}"
+    },
+    "fallback_close_only": {
+      "message": "The Marvin cloud is unreachable and only a close contact is wired for this window, so it cannot be opened right now."
+    },
+    "fallback_not_configured": {
+      "message": "The Marvin cloud is unreachable and no dry contacts are configured for this window."
+    },
+    "relay_unavailable": {
+      "message": "Cannot pulse {entity_id}: that switch is missing or unavailable, so the window was not moved."
+    },
+    "house_command_failed": {
+      "message": "House-wide command failed: {error}"
+    },
+    "setting_failed": {
+      "message": "Could not update the setting: {error}"
+    },
+    "auto_venting_failed": {
+      "message": "Could not change auto venting: {error}"
+    },
+    "venting_condition_failed": {
+      "message": "Could not change the venting condition: {error}"
+    },
+    "contact_position_failed": {
+      "message": "Could not set the contact position: {error}"
+    },
+    "limit_failed": {
+      "message": "Could not set the limit: {error}"
+    },
+    "moisture_metric_failed": {
+      "message": "Could not change the moisture metric: {error}"
+    },
+    "device_id_unavailable": {
+      "message": "The window's device id is unavailable, so this command cannot be sent."
+    },
+    "ota_failed": {
+      "message": "Could not request a firmware update: {error}"
+    },
+    "reboot_failed": {
+      "message": "Could not reboot the window controller: {error}"
+    },
+    "calibrate_failed": {
+      "message": "Could not start calibration: {error}"
+    }
+  },
+  "issues": {
+    "using_dry_contacts": {
+      "title": "{window} is being moved through its dry contacts",
+      "description": "The Marvin cloud is unreachable, so **{window}** was moved using its dry contacts. Only the positions {positions} are available while degraded, and position feedback is limited. This clears itself when the cloud is back."
+    },
+    "using_dry_contacts_reauth": {
+      "title": "{window} is being moved through its dry contacts",
+      "description": "Your Marvin session has expired, so **{window}** was moved using its dry contacts. Sign in again under Settings > Devices & services > Marvin Connected Home to restore cloud control. Only the positions {positions} are available meanwhile, and position feedback is limited."
     }
   }
 }

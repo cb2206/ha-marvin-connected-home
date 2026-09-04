@@ -74,6 +74,6 @@ class TestSafety:
     def test_harmless_actions_stay_enabled(self, key: str) -> None:
         assert _by_key(key).entity_registry_enabled_default is True
 
-    def test_every_button_has_an_error_message(self) -> None:
+    def test_every_button_has_an_error_key(self) -> None:
         for description in BUTTONS:
-            assert description.error and not description.error.endswith(".")
+            assert description.error_key and description.error_key.endswith("_failed")

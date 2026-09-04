@@ -22,9 +22,25 @@ jobs:
       - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
         with:
           python-version: "3.13"
-      - run: pip install pytest ruff
-      - run: ruff check custom_components tests scripts
+      # Pinned so a new ruff release cannot fail main with no code change.
+      - run: pip install "pytest==9.1.1" "ruff==0.16.1"
+      - run: ruff check custom_components tests tests_ha scripts
       - run: python -m pytest tests/ -q
+
+  # The stub-based suite above cannot tell whether the component still fits
+  # Home Assistant; this one runs the real flows and platforms inside it. It
+  # installs the library at the version the manifest pins, so it also proves
+  # that version is actually published.
+  test-homeassistant:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: "3.13"
+      - run: pip install pytest-homeassistant-custom-component
+      - run: pip install $(python -c "import json; print(*json.load(open('custom_components/marvin_connected_home/manifest.json'))['requirements'])")
+      - run: python -m pytest tests_ha/ -q
 
   hassfest:
     runs-on: ubuntu-latest

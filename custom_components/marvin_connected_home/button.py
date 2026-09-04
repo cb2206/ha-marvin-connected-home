@@ -22,7 +22,6 @@ from homeassistant.components.button import (
     ButtonEntity,
     ButtonEntityDescription,
 )
-from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import EntityCategory
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import HomeAssistantError
@@ -30,9 +29,12 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from marvin_connected_home import MarvinClient, MarvinError
 
+from . import MarvinConfigEntry
 from .const import DOMAIN
 from .coordinator import MarvinCoordinator
 from .entity import MarvinAssetEntity
+
+PARALLEL_UPDATES = 0
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -44,16 +46,18 @@ class MarvinButtonDescription(ButtonEntityDescription):
     """
 
     press: Callable[[MarvinClient, str], Coroutine[Any, Any, None]]
-    error: str
+    #: ``exceptions`` key in strings.json used when the action fails.
+    error_key: str
 
 
 BUTTONS: tuple[MarvinButtonDescription, ...] = (
     MarvinButtonDescription(
         key="check_firmware",
         translation_key="check_firmware",
+        device_class=ButtonDeviceClass.UPDATE,
         entity_category=EntityCategory.CONFIG,
         press=lambda client, device_id: client.async_perform_ota(device_id),
-        error="Could not request a firmware update",
+        error_key="ota_failed",
     ),
     MarvinButtonDescription(
         key="reboot",
@@ -61,7 +65,7 @@ BUTTONS: tuple[MarvinButtonDescription, ...] = (
         device_class=ButtonDeviceClass.RESTART,
         entity_category=EntityCategory.CONFIG,
         press=lambda client, device_id: client.async_reboot_device(device_id),
-        error="Could not reboot the window controller",
+        error_key="reboot_failed",
     ),
     MarvinButtonDescription(
         key="recalibrate",
@@ -72,15 +76,15 @@ BUTTONS: tuple[MarvinButtonDescription, ...] = (
         # closest thing HA offers to an "are you sure" at the entity level.
         entity_registry_enabled_default=False,
         press=lambda client, device_id: client.async_recalibrate_device(device_id),
-        error="Could not start calibration",
+        error_key="calibrate_failed",
     ),
 )
 
 
 async def async_setup_entry(
-    hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback
+    hass: HomeAssistant, entry: MarvinConfigEntry, async_add_entities: AddEntitiesCallback
 ) -> None:
-    coordinator: MarvinCoordinator = hass.data[DOMAIN][entry.entry_id]
+    coordinator = entry.runtime_data
     house = coordinator.data
     if house is None:
         return
@@ -109,10 +113,16 @@ class MarvinDeviceButton(MarvinAssetEntity, ButtonEntity):
     async def async_press(self) -> None:
         device = self.device
         if device is None or not device.device_id:
-            raise HomeAssistantError("Device id unavailable; cannot send this command")
+            raise HomeAssistantError(
+                translation_domain=DOMAIN, translation_key="device_id_unavailable"
+            )
         try:
             await self.entity_description.press(
                 self.coordinator.client, device.device_id
             )
         except MarvinError as err:
-            raise HomeAssistantError(f"{self.entity_description.error}: {err}") from err
+            raise HomeAssistantError(
+                translation_domain=DOMAIN,
+                translation_key=self.entity_description.error_key,
+                translation_placeholders={"error": str(err)},
+            ) from err

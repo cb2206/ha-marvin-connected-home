@@ -16,6 +16,7 @@ from types import SimpleNamespace
 import pytest
 
 _fallback = importlib.import_module("marvin_connected_home.fallback")
+_exceptions = importlib.import_module("homeassistant.exceptions")
 ContactStop = _fallback.ContactStop
 FallbackConfig = _fallback.FallbackConfig
 async_pulse = _fallback.async_pulse
@@ -198,9 +199,18 @@ class TestPulse:
         assert hass.calls == ["turn_off", "turn_on", "turn_off"]
 
     def test_unknown_state_does_not_pre_release(self) -> None:
-        hass = _PulseHass(state=None)
+        hass = _PulseHass(state="unknown")
         asyncio.run(async_pulse(hass, "switch.x", 0.01))
         assert hass.calls == ["turn_on", "turn_off"]
+
+    @pytest.mark.parametrize("state", [None, "unavailable"])
+    def test_missing_or_unavailable_switch_refuses(self, state: str | None) -> None:
+        """Home Assistant would accept the service call and log a warning; the
+        cover would then record a position it never drove to."""
+        hass = _PulseHass(state=state)
+        with pytest.raises(_exceptions.HomeAssistantError):
+            asyncio.run(async_pulse(hass, "switch.x", 0.01))
+        assert hass.calls == []
 
     def test_cancellation_mid_pulse_still_releases(self) -> None:
         """A reload or shutdown arriving during the pulse must not leave the

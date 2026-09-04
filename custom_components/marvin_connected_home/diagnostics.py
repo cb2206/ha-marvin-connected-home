@@ -9,11 +9,10 @@ from __future__ import annotations
 from typing import Any
 
 from homeassistant.components.diagnostics import async_redact_data
-from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 
-from .const import CONF_HOUSE_ID, CONF_REFRESH_TOKEN, DOMAIN
-from .coordinator import MarvinCoordinator
+from . import MarvinConfigEntry
+from .const import CONF_HOUSE_ID, CONF_REFRESH_TOKEN
 
 TO_REDACT = {
     CONF_REFRESH_TOKEN,
@@ -42,9 +41,9 @@ TO_REDACT = {
 
 
 async def async_get_config_entry_diagnostics(
-    hass: HomeAssistant, entry: ConfigEntry
+    hass: HomeAssistant, entry: MarvinConfigEntry
 ) -> dict[str, Any]:
-    coordinator: MarvinCoordinator = hass.data[DOMAIN][entry.entry_id]
+    coordinator = entry.runtime_data
     house = coordinator.data
 
     return {
