@@ -1,5 +1,16 @@
 # Changelog
 
+## Unreleased
+
+### Documentation
+
+- Expanded the "unofficial" note into a full disclaimer covering affiliation,
+  trademarks, how the API was worked out, the absence of any
+  backward-compatibility commitment from Marvin, and the lack of warranty.
+  It now appears in the README, on the documentation site, in the integration's
+  module docstring, and in the config flow itself, so it is visible at setup
+  rather than only to people who read the README.
+
 ## 0.5.0 — 2026-09-04
 
 Requires `marvin-connected-home` 0.5.0 and Home Assistant 2025.8 or newer (the

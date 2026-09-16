@@ -1,4 +1,21 @@
-"""The Marvin Connected Home integration."""
+"""The Marvin Connected Home integration.
+
+DISCLAIMER: this is an independent, unofficial custom integration. It is not
+affiliated with, authorized by, endorsed by, or sponsored by Marvin (Marvin
+Windows and Doors), and it is not part of Home Assistant core. "Marvin" and
+"Marvin Connected Home" are trademarks of their respective owners, used here
+only to identify the hardware this software talks to.
+
+Marvin publishes no public API. This was worked out by observing the network
+traffic of the author's own account and the author's own windows; no
+confidential information from Marvin was used. Marvin makes no
+backward-compatibility commitment for these interfaces, so they may change
+without notice and break this integration. Marvin does not support it; Marvin's
+own supported paths are Control4, Crestron and Amazon Alexa.
+
+Provided under the MIT licence, as is and without warranty of any kind. It
+drives motorised windows: use at your own risk.
+"""
 
 from __future__ import annotations
 

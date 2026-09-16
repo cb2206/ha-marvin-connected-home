@@ -3,7 +3,7 @@
     "step": {
       "user": {
         "title": "Sign in to Marvin",
-        "description": "Sign in to Marvin, then paste the address you land on.\n\n1. **[Open the Marvin sign-in page]({authorize_url})** and sign in.\n\n2. You will land on a Microsoft page titled **jwt.ms**. It may say it found no token — that is expected and does not mean anything went wrong.\n\n3. Copy the whole address from your browser's address bar and paste it below. It contains `#code=...`.",
+        "description": "*Unofficial integration. Not affiliated with, authorized by, or endorsed by Marvin. Marvin publishes no public API and does not support this; it may stop working without notice. Provided as is, without warranty — use at your own risk.*\n\nSign in to Marvin, then paste the address you land on.\n\n1. **[Open the Marvin sign-in page]({authorize_url})** and sign in.\n\n2. You will land on a Microsoft page titled **jwt.ms**. It may say it found no token — that is expected and does not mean anything went wrong.\n\n3. Copy the whole address from your browser's address bar and paste it below. It contains `#code=...`.",
         "data": {
           "redirect_url": "Redirect URL"
         }

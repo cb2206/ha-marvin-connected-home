@@ -4,7 +4,19 @@ If you find Marvin Connected Home for Home Assistant useful, consider donating: 
 
 Control [Marvin Connected Home](https://www.marvin.com/solutions/connected-home) automated windows, skylights and doors from Home Assistant.
 
-**Unofficial.** Marvin publishes no public API. This is built on [`marvin-connected-home`](https://github.com/cb2206/marvin-connected-home), a reverse-engineered client. Marvin has re-platformed the service once already (Google Cloud IoT Core → Azure), so it can change without notice.
+Built on [`marvin-connected-home`](https://github.com/cb2206/marvin-connected-home), a reverse-engineered client library.
+
+## Disclaimer
+
+**This is an independent, unofficial project. It is not affiliated with, authorized by, endorsed by, or sponsored by Marvin** (Marvin Windows and Doors). "Marvin", "Marvin Connected Home", "Awaken" and "CLiC" are trademarks of their respective owners, used here only to identify the hardware this software talks to.
+
+Marvin publishes no public API and runs no developer programme. This software was written by observing the network traffic of the author's own Marvin account and the author's own windows. It uses no confidential or proprietary information from Marvin, and no access to any account, device or system other than the author's own.
+
+**Marvin makes no backward-compatibility commitment for these interfaces.** Authentication, endpoints, data structures and behaviour may change at any time and without notice, and when they do this integration will break until someone fixes it. Marvin has re-platformed the service once already (Google Cloud IoT Core → Azure). Marvin does not support it, and neither the breakage nor anything following from it is Marvin's responsibility. Marvin's own supported integration paths are Control4, Crestron and Amazon Alexa; if you need a vendor-supported setup, use one of those.
+
+It is distributed through HACS as a custom repository only — it is not part of Home Assistant core and has not been submitted for inclusion.
+
+Provided free under the MIT licence, **as is and without warranty of any kind**. It drives motorised windows: do not rely on it where a window failing to open, failing to close, or moving unexpectedly would matter. Use at your own risk.
 
 ## What you get
 
