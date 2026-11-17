@@ -13,8 +13,8 @@ backward-compatibility commitment for these interfaces, so they may change
 without notice and break this integration. Marvin does not support it; Marvin's
 own supported paths are Control4, Crestron and Amazon Alexa.
 
-Provided under the MIT licence, as is and without warranty of any kind. It
-drives motorised windows: use at your own risk.
+Provided under the MIT license, as is and without warranty of any kind. It
+drives motorized windows: use at your own risk.
 """
 
 from __future__ import annotations

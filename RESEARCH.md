@@ -96,7 +96,7 @@ Port 8883 in particular traverses fine to `span-gateway`. The Marvin result is r
 | Control4 (Chowmain driver) | No | Vendor states "bi-directional **cloud-based** communications/feedback" |
 | Crestron Home | No | Same |
 
-Note the guide also states windows close and lock automatically on power loss, and that rain/obstruction sensing is on-device — those safety behaviours do not depend on the cloud.
+Note the guide also states windows close and lock automatically on power loss, and that rain/obstruction sensing is on-device — those safety behaviors do not depend on the cloud.
 
 ---
 
@@ -225,7 +225,7 @@ This is the app's **public** client registration — the same values any copy of
 - AVD `marvin_cap`: Android 15 / API 35, arm64, `google_apis` image, `PlayStore.enabled=false` (so `adb root` works)
 - Booted with `-writable-system`; `adb root` + reboot to clear verity
 - Android 15 keeps the CA store in the Conscrypt APEX, so `/system/etc/security/cacerts` alone is not enough. Working sequence: tmpfs over `/system/etc/security/cacerts`, repopulate from `/apex/com.android.conscrypt/cacerts`, add the mitmproxy CA (`c8750f0d.0`), fix owner/mode/SELinux label, `mount --bind` over the APEX path, then `nsenter` the same bind into every running process's mount namespace
-- Proxy: `settings put global http_proxy 10.0.2.x:8080`; React Native uses OkHttp, which honours it
+- Proxy: `settings put global http_proxy 10.0.2.x:8080`; React Native uses OkHttp, which honors it
 - **No Play Integrity block** — the app runs normally on the emulator, so rooting the moto is not needed
 
 **Scripted.** None of the CA work survives a reboot, and it is too fiddly to retype, so it lives in `scripts/capture/`:
@@ -340,7 +340,7 @@ Static analysis gave the base URL, auth mechanism, and domain model; the proxy c
 
 ### Parallel path: just ask Marvin
 
-Marvin *sponsored* the Chowmain driver, which means they have a partner API programme and a business reason to say yes. Email `support@connectedhome.marvin.com` (or 888-323-7107) and ask about API access for a personal Home Assistant integration. Costs you one email, and a sanctioned API is dramatically more durable than a reversed one — especially given they've already re-platformed once.
+Marvin *sponsored* the Chowmain driver, which means they have a partner API program and a business reason to say yes. Email `support@connectedhome.marvin.com` (or 888-323-7107) and ask about API access for a personal Home Assistant integration. Costs you one email, and a sanctioned API is dramatically more durable than a reversed one — especially given they've already re-platformed once.
 
 ### Legal note
 

@@ -17,14 +17,14 @@ authorized by, endorsed by, or sponsored by Marvin** (Marvin Windows and Doors).
 respective owners, used here only to identify the hardware this software talks
 to.
 
-Marvin publishes no public API and runs no developer programme. This software
+Marvin publishes no public API and runs no developer program. This software
 was written by observing the network traffic of the author's own Marvin account
 and the author's own windows. It uses no confidential or proprietary information
 from Marvin, and no access to any account, device or system other than the
 author's own.
 
 **Marvin makes no backward-compatibility commitment for these interfaces.**
-Authentication, endpoints, data structures and behaviour may change at any time
+Authentication, endpoints, data structures and behavior may change at any time
 and without notice, and when they do this integration will break until someone
 fixes it. Marvin does not support it, and neither the breakage nor anything
 following from it is Marvin's responsibility. Marvin's own supported integration
@@ -34,8 +34,8 @@ setup, use one of those.
 It is distributed through HACS as a custom repository only — it is not part of
 Home Assistant core and has not been submitted for inclusion.
 
-Provided free under the MIT licence, **as is and without warranty of any kind**.
-It drives motorised windows: do not rely on it where a window failing to open,
+Provided free under the MIT license, **as is and without warranty of any kind**.
+It drives motorized windows: do not rely on it where a window failing to open,
 failing to close, or moving unexpectedly would matter. Use at your own risk.
 
 [Integration on GitHub](https://github.com/cb2206/ha-marvin-connected-home) ·
@@ -50,7 +50,7 @@ cloud service the Marvin Home app does, which turns out to be considerably more
 capable than what the sanctioned paths expose:
 
 - **Covers with real 0–100% positioning.** Position streams live while the
-  window is travelling, rather than jumping between preset stops.
+  window is traveling, rather than jumping between preset stops.
 - **Sub-second state, including changes Home Assistant did not make.** State
   arrives over SignalR, so pressing the button on the unit or firing a
   dry-contact relay shows up in Home Assistant immediately.
@@ -85,8 +85,8 @@ you to paste a URL back, are in the
 ## Further reading
 
 - [API reference](https://github.com/cb2206/ha-marvin-connected-home/blob/main/API.md) — the reverse-engineered endpoints and realtime protocol
-- [Design notes](https://github.com/cb2206/ha-marvin-connected-home/blob/main/DESIGN.md) — entity modelling decisions and open questions
+- [Design notes](https://github.com/cb2206/ha-marvin-connected-home/blob/main/DESIGN.md) — entity modeling decisions and open questions
 - [Research notes](https://github.com/cb2206/ha-marvin-connected-home/blob/main/RESEARCH.md) — how the platform was worked out
 - [Issue tracker](https://github.com/cb2206/ha-marvin-connected-home/issues)
 
-Released under the MIT licence.
+Released under the MIT license.

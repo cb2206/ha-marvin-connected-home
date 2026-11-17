@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Summarise a capture, highlighting what is *not* already documented.
+"""Summarize a capture, highlighting what is *not* already documented.
 
 `show-actions.sh` answers "did my tap land?" for an endpoint you already expect.
 This answers the exploration question instead: "what did the app just do that
@@ -9,7 +9,7 @@ Endpoint paths are matched against API.md by their static segments, so
 `/devices/gen2/reset/reboot/eval3-xyz` matches a documented
 `/devices/gen2/reset/reboot/{internalDeviceId}`. Anything left over is new.
 
-    python3 scripts/capture/analyse.py [capture.jsonl] [--since N] [--all]
+    python3 scripts/capture/analyze.py [capture.jsonl] [--since N] [--all]
 
     --since N   ignore the first N records (skip a previous session)
     --all       include documented endpoints too, not just novel ones

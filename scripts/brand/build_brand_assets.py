@@ -43,7 +43,7 @@ def bands(img):
 
 mark_band, word_band = bands(master)
 
-# --- icon: the rose mark only, trimmed and centred in a square canvas ---
+# --- icon: the rose mark only, trimmed and centered in a square canvas ---
 mark = master.crop((0, mark_band[0], MASTER_W, mark_band[1] + 1))
 mark = mark.crop(mark.getbbox())
 side = max(mark.size)
@@ -59,7 +59,7 @@ logo = logo.crop(logo.getbbox())
 
 
 def to_white(img):
-    """Recolour the black wordmark to white, leaving the gold mark untouched."""
+    """Recolor the black wordmark to white, leaving the gold mark untouched."""
     out = img.copy()
     px = out.load()
     for y in range(out.height):

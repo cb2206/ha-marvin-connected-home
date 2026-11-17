@@ -109,7 +109,7 @@ class MarvinCapture:
         text = message.text if message.is_text else f"<{len(message.content)} binary bytes>"
 
         # SignalR delimits frames with 0x1e and double-encodes arguments[0];
-        # left as-is here so the analyser sees exactly what came over the wire.
+        # left as-is here so the analyzer sees exactly what came over the wire.
         self._write(
             {
                 "kind": "websocket",

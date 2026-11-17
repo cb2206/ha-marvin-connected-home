@@ -52,7 +52,7 @@ async def async_get_config_entry_diagnostics(
             "asset_count": len(house.assets) if house else 0,
             "auto_venting_enabled": house.auto_venting_enabled if house else None,
             # Which readings carry data, not the values -- enough to diagnose
-            # the sentinel behaviour without disclosing anything about the home.
+            # the sentinel behavior without disclosing anything about the home.
             "environment_populated": sorted(house.environment.populated()) if house else [],
             "preferences": async_redact_data(dict(house.preferences), TO_REDACT)
             if house

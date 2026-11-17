@@ -166,7 +166,7 @@ async def async_pulse(hass: HomeAssistant, entity_id: str, duration: float) -> N
       switch produces no edge, so without this a contact left latched (by a
       crash, a reload mid-pulse, or the user) makes every later pulse a silent
       no-op that still gets reported as a success.
-    * The turn-off runs even if the pulse is cancelled mid-sleep (shutdown,
+    * The turn-off runs even if the pulse is canceled mid-sleep (shutdown,
       reload) or the sleep raises -- otherwise the contact stays held closed,
       which both violates the momentary wiring spec and latches the switch
       into the no-edge state above.

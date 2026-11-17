@@ -127,7 +127,7 @@ Position streams live during travel via SignalR, so `is_opening`/`is_closing` an
 
 ### Firmware reporting
 
-A window exposes **four independent firmware versions**, and they genuinely differ — on the reference unit: `wcB` 04.09.00, `onUnit` 03.02.00, `rainSensor` 03.02.00, `mcB` 03.01.00. Reporting a single number would be actively misleading when diagnosing behaviour that depends on a specific board.
+A window exposes **four independent firmware versions**, and they genuinely differ — on the reference unit: `wcB` 04.09.00, `onUnit` 03.02.00, `rainSensor` 03.02.00, `mcB` 03.01.00. Reporting a single number would be actively misleading when diagnosing behavior that depends on a specific board.
 
 All four are surfaced, three ways:
 
@@ -152,7 +152,7 @@ The per-component sensors are `EntityCategory.DIAGNOSTIC`, which keeps them off 
 
 Exposing the `hA*Position` values as `number` entities is a genuine bonus — it lets the dry-contact stops be retuned from HA.
 
-**Writes are now verified.** `POST /setconfig/{assetId}` with `{"key":…,"value":"<string>"}`. All six keys above confirmed round-tripping. Note every value is a *string* even for ints and bools — the client serialises accordingly.
+**Writes are now verified.** `POST /setconfig/{assetId}` with `{"key":…,"value":"<string>"}`. All six keys above confirmed round-tripping. Note every value is a *string* even for ints and bools — the client serializes accordingly.
 
 These ship writable in v1, `hA*Position` included.
 
@@ -164,7 +164,7 @@ These ship writable in v1, `hA*Position` included.
 | Reboot | `POST /devices/gen2/reset/reboot/{deviceId}` `{}` | **Verified** |
 | Recalibrate | `POST /devices/gen2/activate/calibrate/{deviceId}` `{}` | **Verified** |
 
-These take the **internal device id** (`eval3-…`), not the asset id. All three are fire-and-forget: a plain-text acknowledgement, no request id, nothing to poll. A successful press means the cloud accepted the command, not that the device carried it out — the outcome arrives later over SignalR.
+These take the **internal device id** (`eval3-…`), not the asset id. All three are fire-and-forget: a plain-text acknowledgment, no request id, nothing to poll. A successful press means the cloud accepted the command, not that the device carried it out — the outcome arrives later over SignalR.
 
 Recalibrate drives the sash through a full travel cycle, which makes an accidental press expensive: a bedroom window opens fully and closes again, possibly while nobody is home. Home Assistant has no per-entity confirmation, so it ships with `entity_registry_enabled_default=False` — an owner has to enable it deliberately, and the README asks for a `confirmation:` block on any dashboard card exposing it. That is weaker than a real dialog, and it is the strongest guard the entity model offers.
 
@@ -291,7 +291,7 @@ This ordering is **unverified** — it's the natural ascending interpretation an
 
 Anyone can verify their own mapping in minutes: fire one relay channel, read `sashOpen` back. Worth putting in the README as a setup step.
 
-### Behaviour
+### Behavior
 
 Failover is **automatic**, triggered when the cloud API is unreachable **or** `deviceOnline` is false. The library carries short request timeouts (15 s) precisely so this decision happens in seconds — before them, a hung connection meant a cover command blocked for aiohttp's five-minute default before falling back.
 
@@ -299,14 +299,14 @@ Failover is **automatic**, triggered when the cloud API is unreachable **or** `d
 - A *close* request errs the other way: without a close contact it snaps to the lowest stop, since moving toward closed is the right failure mode for a window it may be raining on.
 - Without a `stop_switch`, `STOP` is unsupported while degraded and raises rather than silently no-oping.
 - The `Control path` sensor always reflects reality (`cloud` / `dry_contact` / `unavailable`), so automations can branch on it. Its `degraded_reason` attribute distinguishes `reauthentication_required` / `cloud_unreachable` / `device_offline` — same degradation, different remedies.
-- Repair issue on switchover, honouring `notify_on_switchover`; cleared automatically once the cloud serves the window again. When the degradation is a dead session rather than an outage, the issue says so and points at re-auth instead of blaming the network.
+- Repair issue on switchover, honoring `notify_on_switchover`; cleared automatically once the cloud serves the window again. When the degradation is a dead session rather than an outage, the issue says so and points at re-auth instead of blaming the network.
 - A connectivity failure *mid-command* is confirmed by one poll before any relay fires: a timed-out request may still have been delivered, and a pulse on top of it would give the sash two conflicting targets. If the poll succeeds the cloud is up and the failure is reported, not worked around.
 - A relay whose switch entity is missing or unavailable is refused rather than "pulsed": HA would accept the service call and log a warning, and the cover would then record a position it never drove to.
 - **A dead session degrades like an outage but is reported as what it is.** The coordinator tracks whether the last poll failed on authentication (`auth_failed`); the relays stay usable either way, because a window you can still close during rain beats doctrinal purity. Only a *per-command* auth error or rejection refuses to fall back — the contacts cannot fix those and would mask them.
 
 ### State while degraded — the honest part
 
-With no cloud, there is no position feedback. Behaviour:
+With no cloud, there is no position feedback. Behavior:
 
 - **With `contact_sensor` configured:** `is_closed` comes from the real sensor. Position is reported as 0 when closed, otherwise the last commanded contact position, with an attribute flagging it as inferred.
 - **Without one:** `is_closed` is `None` (unknown) and position is `None`. The cover stays *controllable* but reports unknown state.
@@ -328,7 +328,7 @@ noted below.
 | `binary_sensor`, `sensor`, `switch`, `number`, `button` | **Verified** |
 | SignalR real-time push | **Verified** |
 | Diagnostics download with redaction | Implemented |
-| Dry-contact fallback | Implemented; selection logic, command orchestration (failover trigger with outage confirmation, pulse release/edge-guard, repair-issue latch, pulse serialisation) unit-tested and exercised inside a real Home Assistant (`tests_ha/`), **failover never executed against real relays** |
+| Dry-contact fallback | Implemented; selection logic, command orchestration (failover trigger with outage confirmation, pulse release/edge-guard, repair-issue latch, pulse serialization) unit-tested and exercised inside a real Home Assistant (`tests_ha/`), **failover never executed against real relays** |
 | Reboot / recalibrate buttons | **Verified** — recalibrate disabled by default |
 | Auto-venting preference writes | **Verified** — note the `temp*` / `temperature*` read-write key asymmetry |
 | `PreferencesUpdated` push | **Verified** — house preferences update live rather than on the 5-minute poll |
@@ -349,7 +349,7 @@ credential → `ConfigEntryAuthFailed`, reauth flow) from 5xx (B2C outage →
 `ConfigEntryNotReady`, silent retry), so a transient Microsoft-side blip no
 longer shows the user a reauth prompt.
 
-### Partial-push defence
+### Partial-push defense
 
 `AssetUpdated` has carried the full asset in every capture, but
 `GET /houses/{id}` proves the API sends *stub* assets in some contexts, so the
@@ -424,7 +424,7 @@ terminal 2 is unwired.
 5. **The failover path has never run against real relays.** Its selection logic
    has unit tests, but no relay has been pulsed by this code. Worth exercising
    deliberately — block access to `azapi.marvin.com` for a minute — rather than
-   discovering its behaviour during a real outage.
+   discovering its behavior during a real outage.
 
 ---
 

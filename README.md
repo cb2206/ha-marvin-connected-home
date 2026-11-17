@@ -10,13 +10,13 @@ Built on [`marvin-connected-home`](https://github.com/cb2206/marvin-connected-ho
 
 **This is an independent, unofficial project. It is not affiliated with, authorized by, endorsed by, or sponsored by Marvin** (Marvin Windows and Doors). "Marvin", "Marvin Connected Home", "Awaken" and "CLiC" are trademarks of their respective owners, used here only to identify the hardware this software talks to.
 
-Marvin publishes no public API and runs no developer programme. This software was written by observing the network traffic of the author's own Marvin account and the author's own windows. It uses no confidential or proprietary information from Marvin, and no access to any account, device or system other than the author's own.
+Marvin publishes no public API and runs no developer program. This software was written by observing the network traffic of the author's own Marvin account and the author's own windows. It uses no confidential or proprietary information from Marvin, and no access to any account, device or system other than the author's own.
 
-**Marvin makes no backward-compatibility commitment for these interfaces.** Authentication, endpoints, data structures and behaviour may change at any time and without notice, and when they do this integration will break until someone fixes it. Marvin has re-platformed the service once already (Google Cloud IoT Core → Azure). Marvin does not support it, and neither the breakage nor anything following from it is Marvin's responsibility. Marvin's own supported integration paths are Control4, Crestron and Amazon Alexa; if you need a vendor-supported setup, use one of those.
+**Marvin makes no backward-compatibility commitment for these interfaces.** Authentication, endpoints, data structures and behavior may change at any time and without notice, and when they do this integration will break until someone fixes it. Marvin has re-platformed the service once already (Google Cloud IoT Core → Azure). Marvin does not support it, and neither the breakage nor anything following from it is Marvin's responsibility. Marvin's own supported integration paths are Control4, Crestron and Amazon Alexa; if you need a vendor-supported setup, use one of those.
 
 It is distributed through HACS as a custom repository only — it is not part of Home Assistant core and has not been submitted for inclusion.
 
-Provided free under the MIT licence, **as is and without warranty of any kind**. It drives motorised windows: do not rely on it where a window failing to open, failing to close, or moving unexpectedly would matter. Use at your own risk.
+Provided free under the MIT license, **as is and without warranty of any kind**. It drives motorized windows: do not rely on it where a window failing to open, failing to close, or moving unexpectedly would matter. Use at your own risk.
 
 ## What you get
 
@@ -86,7 +86,7 @@ One device per window, plus one for the house.
 | Reboot | Button — restarts the controller, does not move the sash |
 | Recalibrate | Button — **disabled by default**, see below |
 
-A window reports **four independent firmware versions** and they genuinely differ (window control board, on-unit control, rain sensor, motor control board, plus a remote if paired). Collapsing them to one number would mislead anyone debugging board-specific behaviour, so each is its own sensor. The device's `sw_version` is the window control board, since that is the one owners track.
+A window reports **four independent firmware versions** and they genuinely differ (window control board, on-unit control, rain sensor, motor control board, plus a remote if paired). Collapsing them to one number would mislead anyone debugging board-specific behavior, so each is its own sensor. The device's `sw_version` is the window control board, since that is the one owners track.
 
 ### Per house
 
@@ -157,7 +157,7 @@ This integration was reverse-engineered from **one account with three casement/a
 That means the gaps are shaped by one person's hardware, not by what the platform can do. If you own Awaken skylights, a Multi-Slide door, CLiC privacy glass, server-side groups, or anything else that produces no entity or a wrong one:
 
 - **Open an issue** with a [diagnostics download](https://www.home-assistant.io/docs/configuration/troubleshooting/#download-diagnostics) (Settings → Devices & services → Marvin Connected Home → ⋮ → Download diagnostics). It is redacted of tokens, email, MAC, IP and UUIDs, and it contains the capability flags and raw state your hardware reports — which is usually enough to add support without owning the hardware.
-- **Or open a PR.** `scripts/capture/` has the tooling used to capture the API in the first place: an Android emulator with mitmproxy, a redacting addon, and an analyser that diffs what the app sent against what API.md already documents. RESEARCH.md documents the setup end to end.
+- **Or open a PR.** `scripts/capture/` has the tooling used to capture the API in the first place: an Android emulator with mitmproxy, a redacting addon, and an analyzer that diffs what the app sent against what API.md already documents. RESEARCH.md documents the setup end to end.
 
 Some things Marvin's app does are deliberately not implemented:
 
@@ -190,7 +190,7 @@ Both are fire-and-forget: Home Assistant reports success when Marvin's cloud acc
 
 ## Notes
 
-- **Entity IDs pick up the area name.** That is Home Assistant behaviour for devices assigned to an area, not something this integration controls. Assign areas thoughtfully during setup.
+- **Entity IDs pick up the area name.** That is Home Assistant behavior for devices assigned to an area, not something this integration controls. Assign areas thoughtfully during setup.
 - **`All windows` is disabled by default.** It broadcasts to every asset in the house — one API call rather than N, and what the Marvin app's "airflow" control does — but it is easy to press by accident. It reports no position, because averaging windows that disagree would be a lie.
 - **Environment sensors may sit `unavailable`.** Marvin returns type minimums (`-1.79e308`, `-2147483648`) rather than null for absent readings; those are mapped to unavailable rather than letting a nonsense value poison your long-term statistics. On accounts where the Air Algorithm is not populating them, they simply stay unavailable.
 - **Attributes live behind an entity's More Info dialog**, not in the device list — Home Assistant only renders an entity's state there. The `Dry contacts` sensor's state is written to be useful on its own for that reason.
@@ -210,6 +210,6 @@ The Marvin icon and logo ship in [`custom_components/marvin_connected_home/brand
 
 See [API.md](API.md) for the reverse-engineered API reference, [DESIGN.md](DESIGN.md) for entity design and open questions, and [RESEARCH.md](RESEARCH.md) for how the platform was worked out.
 
-## Licence
+## License
 
 MIT

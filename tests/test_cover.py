@@ -348,7 +348,7 @@ class TestSupportedFeatures:
         assert cover.supported_features & CoverEntityFeature.STOP
 
 
-class TestPulseSerialisation:
+class TestPulseSerialization:
     def test_concurrent_commands_do_not_interleave_pulses(self) -> None:
         """Two overlapping commands must produce two complete on/off pulses in
         sequence, never on,on,off,off across different relays."""

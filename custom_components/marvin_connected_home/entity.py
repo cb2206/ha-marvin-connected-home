@@ -93,7 +93,7 @@ class MarvinAssetEntity(CoordinatorEntity[MarvinCoordinator]):
     def _via_house(self) -> dict[str, Any]:
         """The ``via_device`` link to the house, in whichever form this HA takes.
 
-        2026.8 deprecated ``via_device`` (an identifier tuple) in favour of
+        2026.8 deprecated ``via_device`` (an identifier tuple) in favor of
         ``via_device_id`` (a registry id, looked up here). The house device is
         registered before any platform loads, so the lookup always succeeds
         on a current install; older cores get the tuple form they understand.

@@ -1,4 +1,4 @@
-"""Entity behaviour inside a real Home Assistant: state, pushes, commands."""
+"""Entity behavior inside a real Home Assistant: state, pushes, commands."""
 
 from __future__ import annotations
 

@@ -12,7 +12,7 @@ is imported, removes that ordering dependency — add new symbols here as more
 platforms get tests.
 
 The stubs are deliberately shallow. Anything that needs real Home Assistant
-behaviour belongs in a test against a real install, not here.
+behavior belongs in a test against a real install, not here.
 """
 
 from __future__ import annotations

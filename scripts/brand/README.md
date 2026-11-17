@@ -66,7 +66,7 @@ documentation asks for it. The brands repository states only that trademarks are
 the property of their respective owners, are used for identification purposes
 only, and that their use does not imply endorsement. This repository takes the
 same position. Marvin can of course ask for the artwork to be removed, and that
-request would be honoured.
+request would be honored.
 
 Source artwork: `marvin-logo.svg`, retrieved from
 `https://www.amaxxwindow.com/web/image/3887-9f36aa28/marvin logo 2.svg` — a

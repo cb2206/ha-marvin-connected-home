@@ -26,7 +26,7 @@ from .entity import MarvinAssetEntity, MarvinHouseEntity
 from .fallback import FallbackConfig, async_pulse, read_contact_sensor
 
 # Commands are independent REST calls to a multi-tenant cloud that handles
-# concurrency itself, and serialising them would also serialise their 15-second
+# concurrency itself, and serializing them would also serialize their 15-second
 # timeouts during an outage -- the moment the fallback path most needs speed.
 # Relay pulses have their own per-window lock.
 PARALLEL_UPDATES = 0
@@ -78,9 +78,9 @@ class MarvinSashCover(MarvinAssetEntity, CoverEntity):
         #: True while a repair issue for this window's degradation is open.
         self._notified_degraded = False
         self._last_contact_position: int | None = None
-        # Serialises relay pulses. Without it, two commands in quick succession
+        # Serializes relay pulses. Without it, two commands in quick succession
         # (an automation plus a dashboard press) interleave their on/sleep/off
-        # sequences across different relays -- behaviour the hardware's wiring
+        # sequences across different relays -- behavior the hardware's wiring
         # spec does not define.
         self._pulse_lock = asyncio.Lock()
 

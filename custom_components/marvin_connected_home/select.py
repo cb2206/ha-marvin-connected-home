@@ -62,7 +62,7 @@ class MarvinMoistureMetricSelect(MarvinHouseEntity, SelectEntity):
         if house is None:
             return None
         value = house.preferences.get(PREFERENCE_KEY)
-        # An unrecognised value means Marvin added a third mode; reporting None
+        # An unrecognized value means Marvin added a third mode; reporting None
         # is better than asserting one of the two we know about.
         return OPTIONS.get(value) if isinstance(value, str) else None
 

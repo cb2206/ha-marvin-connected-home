@@ -67,7 +67,7 @@ DEVICE_SENSORS: tuple[MarvinSensorDescription, ...] = (
 
 #: A window reports four independent firmware versions and they genuinely
 #: differ, so collapsing them to one number would mislead anyone debugging
-#: board-specific behaviour. All are exposed as diagnostic entities, which
+#: board-specific behavior. All are exposed as diagnostic entities, which
 #: keeps them off dashboards while still recording history.
 FIRMWARE_SENSORS: tuple[MarvinSensorDescription, ...] = (
     MarvinSensorDescription(

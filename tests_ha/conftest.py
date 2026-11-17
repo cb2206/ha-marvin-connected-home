@@ -132,7 +132,7 @@ class FakeProvider:
 
 class FakeClient:
     """Stands in for ``MarvinClient``. Listing houses rotates the token, as the
-    real call does -- that is the behaviour the config flow has to survive."""
+    real call does -- that is the behavior the config flow has to survive."""
 
     def __init__(self, session: Any, provider: FakeProvider, **kwargs: Any) -> None:
         self.provider = provider
